@@ -997,7 +997,7 @@ namespace Peregrine
 
   template <typename DataGraphT>
   std::vector<std::pair<SmallGraph, uint64_t>>
-  count(DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns, uint32_t nworkers)
+  count(DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns, uint32_t nworkers, int world_rank, int world_size)
   {
     // initialize
     std::vector<std::pair<SmallGraph, uint64_t>> results;
