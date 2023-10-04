@@ -5,6 +5,7 @@ CFLAGS=-O3 -std=c++2a -Wall -Wextra -Wpedantic -fPIC -fconcepts -I$(ROOT_DIR)/co
 OBJ=core/DataGraph.o core/PO.o core/utils.o core/PatternGenerator.o $(ROOT_DIR)/core/showg.o
 OUTDIR=bin/
 CC=g++
+MPICC=mpic++
 
 all: bliss fsm count test existence-query convert_data
 
@@ -25,6 +26,9 @@ enumerate: apps/enumerate.cc $(OBJ) bliss
 
 count: apps/count.cc $(OBJ) bliss
 	$(CC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+
+countMPI: apps/count.cc $(OBJ) bliss
+	$(MPICC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
 output: apps/output.cc $(OBJ) bliss
 	$(CC) apps/output.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)

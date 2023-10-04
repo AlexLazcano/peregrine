@@ -8,7 +8,7 @@
 #include <condition_variable>
 #include <filesystem>
 #include <memory>
-
+#include <mpi.h>
 #include "Options.hh"
 #include "Graph.hh"
 #include "PatternGenerator.hh"
