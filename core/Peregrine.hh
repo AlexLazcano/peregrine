@@ -1131,14 +1131,14 @@ namespace Peregrine
 
     auto t1 = utils::get_timestamp();
     int index;
+
+    std::vector<SmallGraph> world_patterns;
     while ((index = request_pattern(world_rank)) != -1)
     {
       Context::task_ctr = 0;
       Context::gcount = 0;
-
-      printf("rank: %d received index: %d\n", world_rank, index);
+      //Use pattern from coordinator 
       auto p = new_patterns[index];
-      
 
       // set new pattern
       dg->set_rbi(p);
@@ -1152,29 +1152,9 @@ namespace Peregrine
       // get counts
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
+      world_patterns.emplace_back(p);
     }
     
-  
-  
-    // for (const auto &p : new_patterns)
-    // {
-    //   // reset state
-    //   Context::task_ctr = 0;
-    //   Context::gcount = 0;
-
-    //   // set new pattern
-    //   dg->set_rbi(p);
-
-    //   // begin matching
-    //   barrier.release();
-
-    //   // sleep until matching finished
-    //   barrier.join();
-
-    //   // get counts
-    //   uint64_t global_count = Context::gcount;
-    //   results.emplace_back(p, global_count);
-    // }
     auto t2 = utils::get_timestamp();
 
     barrier.finish();
@@ -1185,7 +1165,7 @@ namespace Peregrine
 
     if (must_convert_counts)
     {
-      results = convert_counts(results, patterns);
+      results = convert_counts(results, world_patterns);
     }
 
     if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
