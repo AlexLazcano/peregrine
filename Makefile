@@ -47,4 +47,4 @@ clean:
 	rm -f core/*.o bin/*
 
 runCount: 
-	mpirun -np 4 bin/countMPI data/citeseer 3-motifs 4
+	mpirun -np 4 bin/countMPI data/citeseer 4-motifs 1
