@@ -50,29 +50,19 @@ int main(int argc, char *argv[])
   std::vector<std::pair<Peregrine::SmallGraph, uint64_t>> result;
   if (is_directory(data_graph_name))
   {
-    if (world_rank == 0)
-    {
-      printf("counting on rank 0\n");
-      result = Peregrine::count(data_graph_name, patterns, nthreads, world_rank, world_size);
-    }
+    result = Peregrine::count(data_graph_name, patterns, nthreads, world_rank, world_size);
   }
   else
   {
-    if (world_rank == 0)
-    {
-      printf("counting on rank 0\n");
-      Peregrine::SmallGraph G(data_graph_name);
-      result = Peregrine::count(G, patterns, nthreads, world_rank, world_size);
-    }
+    Peregrine::SmallGraph G(data_graph_name);
+    result = Peregrine::count(G, patterns, nthreads, world_rank, world_size);
   }
 
-  if (world_rank == 0)
+  for (const auto &[p, v] : result)
   {
-    for (const auto &[p, v] : result)
-    {
-      std::cout << p << ": " << v << std::endl;
-    }
+    std::cout << p << ": " << v << std::endl;
   }
+  
 
   MPI_Finalize();
   return 0;
