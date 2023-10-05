@@ -134,6 +134,44 @@ namespace Peregrine
     return lcount;
   }
 
+  void pattern_coordinator(int vector_size, int world_size)
+  {
+    // This thread should wait for another node to ask for a pattern then return it a pattern.
+    printf("coordinator has started, \n");
+    int currIndex = 0;
+    int buffer;
+    
+    MPI_Status status;
+    int finished = 0;
+    while (finished < world_size)
+    {
+      // printf("probing..\n");
+      MPI_Probe(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+      int dummy;
+      int source = status.MPI_SOURCE;
+      // printf("Probed %d\n", source);
+      MPI_Recv(&dummy, 0, MPI_INT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+      buffer = currIndex < vector_size ? currIndex : -1;
+      MPI_Send(&buffer, 1, MPI_INT, source, 0, MPI_COMM_WORLD);
+      if (!(currIndex < vector_size))
+      {
+         finished++;
+      }
+      currIndex++; // TODO: Change chunk size to handle more course grained 
+    }
+  }
+  // index -1 means no more
+  // index 0 means received an index
+  int request_pattern(int world_rank) { 
+    int nextPatternIndex;
+    MPI_Send(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    MPI_Recv(&nextPatternIndex, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    return nextPatternIndex;
+    
+  }
+
   void count_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b)
   {
     (void)tid; // unused
@@ -1049,6 +1087,17 @@ namespace Peregrine
     Barrier barrier(nworkers);
     std::vector<std::jthread> pool;
 
+    if (world_rank == 0)
+    {
+      // if rank == 0 then make a jthread that handles pattern distribution
+      int size = new_patterns.size();
+      std::jthread coordinator([size, world_size]() {
+        pattern_coordinator(size, world_size);
+      });
+      coordinator.detach();
+    }
+
+
     DataGraph *dg;
     if constexpr (std::is_same_v<std::decay_t<DataGraphT>, DataGraph>)
     {
@@ -1081,11 +1130,15 @@ namespace Peregrine
     barrier.join();
 
     auto t1 = utils::get_timestamp();
-    for (const auto &p : new_patterns)
+    int index;
+    while ((index = request_pattern(world_rank)) != -1)
     {
-      // reset state
       Context::task_ctr = 0;
       Context::gcount = 0;
+
+      printf("rank: %d received index: %d\n", world_rank, index);
+      auto p = new_patterns[index];
+      
 
       // set new pattern
       dg->set_rbi(p);
@@ -1100,6 +1153,28 @@ namespace Peregrine
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
     }
+    
+  
+  
+    // for (const auto &p : new_patterns)
+    // {
+    //   // reset state
+    //   Context::task_ctr = 0;
+    //   Context::gcount = 0;
+
+    //   // set new pattern
+    //   dg->set_rbi(p);
+
+    //   // begin matching
+    //   barrier.release();
+
+    //   // sleep until matching finished
+    //   barrier.join();
+
+    //   // get counts
+    //   uint64_t global_count = Context::gcount;
+    //   results.emplace_back(p, global_count);
+    // }
     auto t2 = utils::get_timestamp();
 
     barrier.finish();
