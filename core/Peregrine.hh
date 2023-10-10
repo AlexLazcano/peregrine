@@ -165,20 +165,19 @@ namespace Peregrine
   void result_receiver(int world_size, std::vector<std::pair<int64_t, uint64_t>> &results){
   MPI_Status status;
   int countOfMessage;
-  printf("p0 receiveing\n");
+  // printf("p0 receiveing\n");
   
   // std::vector<std::pair<int64_t, uint64_t>> results;
   for (int p = 0; p < world_size-1; p++)
   {
-    MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    MPI_Probe(MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &status);
     
     MPI_Get_count(&status, MPI_UINT64_T, &countOfMessage);
 
     std::vector<int64_t> msg_buffer(countOfMessage);
 
-    // might need to make an MPI struct to do int and uint (index, count)
-    MPI_Recv(msg_buffer.data(), countOfMessage, MPI_INT64_T, status.MPI_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    printf("Received In Process 0 from %d with msg len %d\n", status.MPI_SOURCE, countOfMessage);
+    MPI_Recv(msg_buffer.data(), countOfMessage, MPI_INT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    // printf("Received In Process 0 from %d with msg len %d\n", status.MPI_SOURCE, countOfMessage);
 
     for (int i = 0; i < countOfMessage; i+=2)
     {
@@ -1186,8 +1185,6 @@ namespace Peregrine
     auto t2 = utils::get_timestamp();
 
     barrier.finish();
-    // printf("Syncing\n");
-
 
     for (auto &th : pool)
     {
@@ -1195,14 +1192,19 @@ namespace Peregrine
     }
 
     int local_size = local_patterns.size();
-    printf("Process %d has %d patterns\n", world_rank, local_size);
+    // printf("PROCESS %d has %d patterns\n", world_rank, local_size);
+
+    if (world_rank != 0 && local_patterns.empty())
+    {
+      return results;
+    }
+
     if (world_rank == 0)
     {
-      printf("number of patterns: %ld \n", patterns.size());
-      // int patterns_size = patterns.size();
-      // std::vector<std::pair<int64_t, uint64_t>>received_results = 
+      // printf("number of patterns: %ld \n", patterns.size());
+
       result_receiver(world_size, local_results);
-      printf("received all \n");
+      // printf("received all \n");
 
       for (auto& pair : local_results) {
         // std::cout << "rec pair: " << pair.first << " count: " << pair.second << "\n";
@@ -1229,13 +1231,13 @@ namespace Peregrine
       
       for (int i = 0; i < local_size; i++)
       {
-        printf("%d emplaced %ld %ld\n", world_rank, local_results[i].first, local_results[i].second);
+        // printf("%d emplaced %ld %ld\n", world_rank, local_results[i].first, local_results[i].second);
         send_buffer.emplace_back(local_results[i].first);
         send_buffer.emplace_back((int64_t) local_results[i].second);
       }
-
-      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_INT64_T, 0, 0, MPI_COMM_WORLD);
-      printf("SENT p%d len: %ld\n", world_rank, send_buffer.size());
+      // printf("SENDING p%d len: %ld\n", world_rank, send_buffer.size());
+      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_INT64_T, 0, 1, MPI_COMM_WORLD);
+      
     
       return results;
     }
