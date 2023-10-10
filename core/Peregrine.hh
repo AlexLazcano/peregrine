@@ -1204,7 +1204,7 @@ namespace Peregrine
       // printf("number of patterns: %ld \n", patterns.size());
 
       result_receiver(world_size, local_results);
-      // printf("received all \n");
+     
 
       for (auto& pair : local_results) {
         // std::cout << "rec pair: " << pair.first << " count: " << pair.second << "\n";
@@ -1212,11 +1212,11 @@ namespace Peregrine
         results[pair.first] = std::make_pair(patterns[pair.first], pair.second);
         // results.emplace(results.begin() + pair.first, patterns[pair.first], pair.second);
       }
-
-      // if (must_convert_counts)
-      // {
-      //   results = convert_counts(results, patterns);
-      // }
+      printf("SYNCED: Received all \n");
+      if (must_convert_counts)
+      {
+        results = convert_counts(results, patterns);
+      }
 
       if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
       {
