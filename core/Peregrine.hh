@@ -161,6 +161,32 @@ namespace Peregrine
       currIndex++; // TODO: Change chunk size to handle more course grained 
     }
   }
+
+  void result_receiver(int world_size, std::vector<std::pair<int64_t, uint64_t>> &results){
+  MPI_Status status;
+  int countOfMessage;
+  printf("p0 receiveing\n");
+  
+  // std::vector<std::pair<int64_t, uint64_t>> results;
+  for (int p = 0; p < world_size-1; p++)
+  {
+    MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    
+    MPI_Get_count(&status, MPI_UINT64_T, &countOfMessage);
+
+    std::vector<int64_t> msg_buffer(countOfMessage);
+
+    // might need to make an MPI struct to do int and uint (index, count)
+    MPI_Recv(msg_buffer.data(), countOfMessage, MPI_INT64_T, status.MPI_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    printf("Received In Process 0 from %d with msg len %d\n", status.MPI_SOURCE, countOfMessage);
+
+    for (int i = 0; i < countOfMessage; i+=2)
+    {
+      results.emplace_back(msg_buffer[i], (uint64_t) msg_buffer[i+1]);
+    }
+  }
+  // return results;
+ }
   // index -1 means no more
   // index 0 means received an index
   int request_pattern(int world_rank) { 
@@ -1038,7 +1064,8 @@ namespace Peregrine
   count(DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns, uint32_t nworkers, int world_rank, int world_size)
   {
     // initialize
-    std::vector<std::pair<SmallGraph, uint64_t>> results;
+    std::vector<std::pair<SmallGraph, uint64_t>> results(patterns.size());
+    std::vector<std::pair<int64_t, uint64_t>> local_results;
     if (patterns.empty()) return results;
 
     // optimize if all unlabelled vertex-induced patterns of a certain size
@@ -1130,9 +1157,9 @@ namespace Peregrine
     barrier.join();
 
     auto t1 = utils::get_timestamp();
-    int index;
+    int64_t index;
 
-    std::vector<SmallGraph> world_patterns;
+    std::vector<SmallGraph> local_patterns;
     while ((index = request_pattern(world_rank)) != -1)
     {
       Context::task_ctr = 0;
@@ -1151,33 +1178,82 @@ namespace Peregrine
 
       // get counts
       uint64_t global_count = Context::gcount;
-      results.emplace_back(p, global_count);
-      world_patterns.emplace_back(p);
+      // results.emplace_back(p, global_count);
+      local_results.emplace_back(index, global_count);
+      local_patterns.emplace_back(p);
     }
     
     auto t2 = utils::get_timestamp();
 
     barrier.finish();
+    // printf("Syncing\n");
+
+
     for (auto &th : pool)
     {
       th.join();
     }
 
-    if (must_convert_counts)
+    int local_size = local_patterns.size();
+    printf("Process %d has %d patterns\n", world_rank, local_size);
+    if (world_rank == 0)
     {
-      results = convert_counts(results, world_patterns);
+      printf("number of patterns: %ld \n", patterns.size());
+      // int patterns_size = patterns.size();
+      // std::vector<std::pair<int64_t, uint64_t>>received_results = 
+      result_receiver(world_size, local_results);
+      printf("received all \n");
+
+      for (auto& pair : local_results) {
+        // std::cout << "rec pair: " << pair.first << " count: " << pair.second << "\n";
+        // local_patterns.emplace_back(patterns[pair.first], pair.second);
+        results[pair.first] = std::make_pair(patterns[pair.first], pair.second);
+        // results.emplace(results.begin() + pair.first, patterns[pair.first], pair.second);
+      }
+
+      // if (must_convert_counts)
+      // {
+      //   results = convert_counts(results, patterns);
+      // }
+
+      if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+      {
+        delete dg;
+      }
+
+      utils::Log{} << "-------" << "\n";
+      utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+      return results; 
+    } else { 
+      std::vector<int64_t> send_buffer;
+      
+      for (int i = 0; i < local_size; i++)
+      {
+        printf("%d emplaced %ld %ld\n", world_rank, local_results[i].first, local_results[i].second);
+        send_buffer.emplace_back(local_results[i].first);
+        send_buffer.emplace_back((int64_t) local_results[i].second);
+      }
+
+      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_INT64_T, 0, 0, MPI_COMM_WORLD);
+      printf("SENT p%d len: %ld\n", world_rank, send_buffer.size());
+    
+      return results;
     }
+    // if (must_convert_counts)
+    // {
+    //   results = convert_counts(results, local_patterns);
+    // }
 
-    if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
-    {
-      delete dg;
-    }
+    // if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+    // {
+    //   delete dg;
+    // }
 
-    utils::Log{} << "-------" << "\n";
-    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+    // utils::Log{} << "-------" << "\n";
+    // utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
 
-    return results;
+    // return results;
   }
 
   template <

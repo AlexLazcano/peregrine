@@ -57,12 +57,14 @@ int main(int argc, char *argv[])
     Peregrine::SmallGraph G(data_graph_name);
     result = Peregrine::count(G, patterns, nthreads, world_rank, world_size);
   }
-
-  for (const auto &[p, v] : result)
+  if (world_rank == 0)
   {
-    std::cout << p << ": " << v << std::endl;
+    for (const auto &[p, v] : result)
+    {
+      std::cout << p << ": " << v << std::endl;
+    }
   }
-  
+  printf("DONE Process %d\n", world_rank);
 
   MPI_Finalize();
   return 0;
