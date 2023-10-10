@@ -1209,10 +1209,10 @@ namespace Peregrine
       for (auto& pair : local_results) {
         // std::cout << "rec pair: " << pair.first << " count: " << pair.second << "\n";
         // local_patterns.emplace_back(patterns[pair.first], pair.second);
-        results[pair.first] = std::make_pair(patterns[pair.first], pair.second);
+        results[pair.first] = std::make_pair(new_patterns[pair.first], pair.second);
         // results.emplace(results.begin() + pair.first, patterns[pair.first], pair.second);
       }
-      printf("SYNCED: Received all \n");
+      // printf("SYNCED: Received all \n");
       if (must_convert_counts)
       {
         results = convert_counts(results, patterns);
