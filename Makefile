@@ -4,7 +4,7 @@ BLISS_LDFLAGS=-L$(ROOT_DIR)/core/bliss-0.73/ -lbliss
 CFLAGS=-O3 -std=c++2a -Wall -Wextra -Wpedantic -fPIC -fconcepts -I$(ROOT_DIR)/core/ -Itbb2020/include
 OBJ=core/DataGraph.o core/PO.o core/utils.o core/PatternGenerator.o $(ROOT_DIR)/core/showg.o
 OUTDIR=bin/
-CC=g++
+CC=g++-10
 MPICC=mpic++
 
 all: bliss fsm count test existence-query convert_data
@@ -28,7 +28,7 @@ count: apps/count.cc $(OBJ) bliss
 	$(CC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
 countMPI: apps/count.cc $(OBJ) bliss
-	$(MPICC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+	$(MPICC) -cxx=$(CC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
 output: apps/output.cc $(OBJ) bliss
 	$(CC) apps/output.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
