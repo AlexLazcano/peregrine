@@ -160,6 +160,7 @@ namespace Peregrine
       }
       currIndex++; // TODO: Change chunk size to handle more course grained 
     }
+    printf("coordinator has finished\n");
   }
 
   void result_receiver(int world_size, std::vector<std::pair<int64_t, uint64_t>> &results){
@@ -192,6 +193,7 @@ namespace Peregrine
     int nextPatternIndex;
     MPI_Send(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD);
     MPI_Recv(&nextPatternIndex, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    printf("RECEIVED: rank %d received: %d\n", world_rank, nextPatternIndex);
 
     return nextPatternIndex;
     
@@ -1116,6 +1118,7 @@ namespace Peregrine
     if (world_rank == 0)
     {
       // if rank == 0 then make a jthread that handles pattern distribution
+       printf("number of patterns: %ld \n", patterns.size());
       int size = new_patterns.size();
       std::jthread coordinator([size, world_size]() {
         pattern_coordinator(size, world_size);
@@ -1154,6 +1157,8 @@ namespace Peregrine
 
     // make sure the threads are all running
     barrier.join();
+    printf("Set up barrier reached %d\n", world_rank);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     auto t1 = utils::get_timestamp();
     int64_t index;
@@ -1190,9 +1195,10 @@ namespace Peregrine
     {
       th.join();
     }
+    printf("P%d done searching\n", world_rank);
 
     int local_size = local_patterns.size();
-    // printf("PROCESS %d has %d patterns\n", world_rank, local_size);
+    printf("PROCESS %d has %d patterns\n", world_rank, local_size);
 
     if (world_rank != 0 && local_patterns.empty())
     {
@@ -1201,7 +1207,6 @@ namespace Peregrine
 
     if (world_rank == 0)
     {
-      // printf("number of patterns: %ld \n", patterns.size());
 
       result_receiver(world_size, local_results);
      
@@ -1212,7 +1217,7 @@ namespace Peregrine
         results[pair.first] = std::make_pair(new_patterns[pair.first], pair.second);
         // results.emplace(results.begin() + pair.first, patterns[pair.first], pair.second);
       }
-      // printf("SYNCED: Received all \n");
+      printf("SYNCED: Received all \n");
       if (must_convert_counts)
       {
         results = convert_counts(results, patterns);
