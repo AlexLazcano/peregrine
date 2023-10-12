@@ -10,5 +10,3 @@ RUN apt-get --yes -qq update \
                       gcc \
                       libopenmpi-dev \
  && apt-get --yes -qq clean 
-
-CMD [ "/bin/bash" ]
