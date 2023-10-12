@@ -9,6 +9,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     g++-10 \
     gcc \
     libunittest++-dev\
+    libmpich-dev \
     mpich\
     make \
     libopenmpi-dev && \
