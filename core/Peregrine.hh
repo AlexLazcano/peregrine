@@ -193,7 +193,7 @@ namespace Peregrine
     int nextPatternIndex;
     MPI_Send(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD);
     MPI_Recv(&nextPatternIndex, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    printf("RECEIVED: rank %d received: %d\n", world_rank, nextPatternIndex);
+    // printf("RECEIVED: rank %d received: %d\n", world_rank, nextPatternIndex);
 
     return nextPatternIndex;
     
@@ -1157,7 +1157,7 @@ namespace Peregrine
 
     // make sure the threads are all running
     barrier.join();
-    printf("Set up barrier reached %d\n", world_rank);
+    // printf("Set up barrier reached %d\n", world_rank);
     MPI_Barrier(MPI_COMM_WORLD);
 
     auto t1 = utils::get_timestamp();
@@ -1195,10 +1195,10 @@ namespace Peregrine
     {
       th.join();
     }
-    printf("P%d done searching\n", world_rank);
+    // printf("P%d done searching\n", world_rank);
 
     int local_size = local_patterns.size();
-    printf("PROCESS %d has %d patterns\n", world_rank, local_size);
+    // printf("PROCESS %d has %d patterns\n", world_rank, local_size);
 
     if (world_rank != 0 && local_patterns.empty())
     {
@@ -1217,7 +1217,7 @@ namespace Peregrine
         results[pair.first] = std::make_pair(new_patterns[pair.first], pair.second);
         // results.emplace(results.begin() + pair.first, patterns[pair.first], pair.second);
       }
-      printf("SYNCED: Received all \n");
+      // printf("SYNCED: Received all \n");
       if (must_convert_counts)
       {
         results = convert_counts(results, patterns);
@@ -1243,7 +1243,10 @@ namespace Peregrine
       // printf("SENDING p%d len: %ld\n", world_rank, send_buffer.size());
       MPI_Send(send_buffer.data(), send_buffer.size(), MPI_INT64_T, 0, 1, MPI_COMM_WORLD);
       
-    
+      if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+      {
+        delete dg;
+      }
       return results;
     }
     // if (must_convert_counts)
