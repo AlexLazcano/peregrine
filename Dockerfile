@@ -25,7 +25,6 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 COPY . .
 
 RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 30
-
 RUN update-alternatives --config g++
 # run make
 RUN make countMPI
