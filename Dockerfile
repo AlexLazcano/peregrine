@@ -15,6 +15,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     mpich\
     make \
     mpi-default-dev\
+    software-properties-common \
     libopenmpi-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -30,4 +31,4 @@ RUN update-alternatives --config g++
 RUN make countMPI
 
 # run tests
-CMD ["/bin/bash"]
+CMD ["python", "api.py"]
