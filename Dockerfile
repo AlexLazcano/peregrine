@@ -28,7 +28,7 @@ COPY . .
 RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 30
 RUN update-alternatives --config g++
 # run make
-RUN make countMPI
+#RUN make countMPI
 
 # run tests
-#CMD ["python", "api.py"]
+CMD ["make", "countMPI"]
