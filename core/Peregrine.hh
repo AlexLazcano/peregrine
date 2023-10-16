@@ -1,6 +1,6 @@
 #ifndef PEREGRINE_HH
 #define PEREGRINE_HH
-
+#define OMPI_SKIP_MPICXX 1
 #include <type_traits>
 #include <thread>
 #include <chrono>
