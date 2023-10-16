@@ -31,4 +31,4 @@ RUN update-alternatives --config g++
 RUN make countMPI
 
 # run tests
-CMD ["python", "api.py"]
+#CMD ["python", "api.py"]
