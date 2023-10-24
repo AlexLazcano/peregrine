@@ -19,13 +19,15 @@ int main(int argc, char *argv[])
     std::cerr << "USAGE: " << argv[0] << " <data graph> <pattern | #-motifs | #-clique> [# threads]" << std::endl;
     return -1;
   }
-  int world_rank, world_size;
+  
   const std::string data_graph_name(argv[1]);
   const std::string pattern_name(argv[2]);
   size_t nthreads = argc < 4 ? 1 : std::stoi(argv[3]);
+  int world_rank, world_size;
   MPI_Init(NULL, NULL);
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+  MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 
   printf("Hello world from process %d, of %d. Thread num: %ld \n", world_rank, world_size, nthreads);
 

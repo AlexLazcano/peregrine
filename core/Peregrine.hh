@@ -134,30 +134,36 @@ namespace Peregrine
     return lcount;
   }
 
-  void pattern_coordinator(int vector_size, int world_size)
+  void pattern_coordinator(const int vector_size, int world_size)
   {
+    printf("running coord\n");
     // This thread should wait for another node to ask for a pattern then return it a pattern.
-    printf("coordinator has started, \n");
     int currIndex = 0;
     int buffer;
     
     MPI_Status status;
     int finished = 0;
+    int res;
     while (finished < world_size)
     {
-      // printf("probing..\n");
-      MPI_Probe(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-      int dummy;
+      // Tag 0 Recv - FIX: sometimes invalid communicator
+      res = MPI_Recv(&buffer, 0, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+      // printf("recv res: %d\n", res);
       int source = status.MPI_SOURCE;
-      // printf("Probed %d\n", source);
-      MPI_Recv(&dummy, 0, MPI_INT, source, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
+  
       buffer = currIndex < vector_size ? currIndex : -1;
-      MPI_Send(&buffer, 1, MPI_INT, source, 0, MPI_COMM_WORLD);
+      // printf("rec req from %d: buffer: %d\n", source, buffer);
+      do
+      {
+        // Tag 1 Send
+        res = MPI_Send(&buffer, 1, MPI_INT, source, 1, MPI_COMM_WORLD);
+      } while (res != 0);
+
       if (!(currIndex < vector_size))
       {
          finished++;
       }
+      // printf("current index: %d\n", currIndex);
       currIndex++; // TODO: Change chunk size to handle more course grained 
     }
     printf("coordinator has finished\n");
@@ -166,35 +172,44 @@ namespace Peregrine
   void result_receiver(int world_size, std::vector<std::pair<int64_t, uint64_t>> &results){
   MPI_Status status;
   int countOfMessage;
-  // printf("p0 receiveing\n");
+  printf("p0 receiving\n");
   
-  // std::vector<std::pair<int64_t, uint64_t>> results;
+  int res;
   for (int p = 0; p < world_size-1; p++)
   {
-    MPI_Probe(MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &status);
+    // causing abort, incomplete ?
+    res = MPI_Probe(MPI_ANY_SOURCE, 2, MPI_COMM_WORLD, &status);
     
     MPI_Get_count(&status, MPI_UINT64_T, &countOfMessage);
+    // printf("res: %d size: %d  from: %d\n", res, countOfMessage, status.MPI_ERROR);
 
     std::vector<int64_t> msg_buffer(countOfMessage);
-
-    MPI_Recv(msg_buffer.data(), countOfMessage, MPI_INT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    // printf("Received In Process 0 from %d with msg len %d\n", status.MPI_SOURCE, countOfMessage);
+    // int64_t msg_buffer[countOfMessage];
+    // Tag 2 recv - has assertion failed
+    MPI_Recv(msg_buffer.data(), countOfMessage, MPI_INT64_T, status.MPI_SOURCE, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
     for (int i = 0; i < countOfMessage; i+=2)
     {
       results.emplace_back(msg_buffer[i], (uint64_t) msg_buffer[i+1]);
     }
   }
-  // return results;
  }
   // index -1 means no more
   // index 0 means received an index
   int request_pattern(int world_rank) { 
     int nextPatternIndex;
-    MPI_Send(NULL, 0, MPI_INT, 0, 0, MPI_COMM_WORLD);
-    MPI_Recv(&nextPatternIndex, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    // printf("RECEIVED: rank %d received: %d\n", world_rank, nextPatternIndex);
-
+    int res;
+    int dummy = 0;
+    do
+    {
+      //Tag 0 Send
+      res = MPI_Send(&dummy, 0, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    } while (res != 0);
+    
+    // This sometimes fails? 
+    // Tag 1 Recv
+    res = MPI_Recv(&nextPatternIndex, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    printf("RECV %d at %d\n", nextPatternIndex, world_rank);
     return nextPatternIndex;
     
   }
@@ -1115,18 +1130,6 @@ namespace Peregrine
     Barrier barrier(nworkers);
     std::vector<std::jthread> pool;
 
-    if (world_rank == 0)
-    {
-      // if rank == 0 then make a jthread that handles pattern distribution
-       printf("number of patterns: %ld \n", patterns.size());
-      int size = new_patterns.size();
-      std::jthread coordinator([size, world_size]() {
-        pattern_coordinator(size, world_size);
-      });
-      coordinator.detach();
-    }
-
-
     DataGraph *dg;
     if constexpr (std::is_same_v<std::decay_t<DataGraphT>, DataGraph>)
     {
@@ -1157,19 +1160,35 @@ namespace Peregrine
 
     // make sure the threads are all running
     barrier.join();
-    // printf("Set up barrier reached %d\n", world_rank);
-    MPI_Barrier(MPI_COMM_WORLD);
+
+    std::jthread* coordinator = nullptr;
+    if (world_rank == 0)
+    {
+      // if rank == 0 then make a jthread that handles pattern distribution
+      printf("number of patterns: %ld \n", patterns.size());
+      int size = patterns.size();
+      coordinator = new std::jthread([size, world_size]() {
+        pattern_coordinator(size, world_size);
+      });
+      
+    }
+   
 
     auto t1 = utils::get_timestamp();
     int64_t index;
 
     std::vector<SmallGraph> local_patterns;
-    while ((index = request_pattern(world_rank)) != -1)
+    while (true)
     {
+      index = request_pattern(world_rank);
+      if (index == -1)
+      {
+        break;
+      }
       Context::task_ctr = 0;
       Context::gcount = 0;
       //Use pattern from coordinator 
-      auto p = new_patterns[index];
+      auto& p = new_patterns[index];
 
       // set new pattern
       dg->set_rbi(p);
@@ -1195,10 +1214,11 @@ namespace Peregrine
     {
       th.join();
     }
-    // printf("P%d done searching\n", world_rank);
-
+    printf("P%d done searching\n", world_rank);
+    
+    
     int local_size = local_patterns.size();
-    // printf("PROCESS %d has %d patterns\n", world_rank, local_size);
+    printf("PROCESS %d has %d patterns\n", world_rank, local_size);
 
     if (world_rank != 0 && local_patterns.empty())
     {
@@ -1212,12 +1232,14 @@ namespace Peregrine
      
 
       for (auto& pair : local_results) {
-        // std::cout << "rec pair: " << pair.first << " count: " << pair.second << "\n";
-        // local_patterns.emplace_back(patterns[pair.first], pair.second);
+        
         results[pair.first] = std::make_pair(new_patterns[pair.first], pair.second);
-        // results.emplace(results.begin() + pair.first, patterns[pair.first], pair.second);
+       
       }
       // printf("SYNCED: Received all \n");
+      coordinator->join();
+      delete coordinator;
+      printf("deleted coordinator\n");
       if (must_convert_counts)
       {
         results = convert_counts(results, patterns);
@@ -1241,7 +1263,8 @@ namespace Peregrine
         send_buffer.emplace_back((int64_t) local_results[i].second);
       }
       // printf("SENDING p%d len: %ld\n", world_rank, send_buffer.size());
-      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_INT64_T, 0, 1, MPI_COMM_WORLD);
+      // Tag 2 Send
+      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_INT64_T, 0, 2, MPI_COMM_WORLD);
       
       if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
       {
@@ -1249,21 +1272,6 @@ namespace Peregrine
       }
       return results;
     }
-    // if (must_convert_counts)
-    // {
-    //   results = convert_counts(results, local_patterns);
-    // }
-
-    // if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
-    // {
-    //   delete dg;
-    // }
-
-    // utils::Log{} << "-------" << "\n";
-    // utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
-
-
-    // return results;
   }
 
   template <
