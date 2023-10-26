@@ -27,7 +27,7 @@
 #include <string>
 #include <stdint.h>
 #include <libgen.h>
-
+#include <filesystem>
 /* gtools.h : General header for gtools programs. */
 
 #ifndef MAXN
@@ -209,7 +209,6 @@ gt_abort(const std::string &msg)     /* Write message and halt. */
 *  GLOBALS ACCESSED: none                                                    *
 *                                                                            *
 *****************************************************************************/
-
 static int
 nextelement(set *set1, int m, int pos)
 {
@@ -706,13 +705,18 @@ namespace Peregrine
   std::vector<std::vector<std::pair<uint32_t, uint32_t>>>
   get_elists(uint32_t size)
   {
-
+    // different logic is needed if running within container
+    const char* dockerContainerEnv = std::getenv("DOCKER_CONTAINER");
+    std::string infilename = "";
     // generate filename from size
-    char filename[] = __FILE__;
-    char *dir = dirname(filename);
-    const std::string infilename = std::string(dir)
-      + "/graphs/graph" + std::to_string(size) + "c.g6";
-
+    if(dockerContainerEnv){
+        infilename = "/pergrine/core/graphs/graph" + std::to_string(size) + "c.g6";
+    }else{
+        char filename[] = __FILE__;
+        char *dir = dirname(filename);
+        infilename = std::string(dir)
+        + "/graphs/graph" + std::to_string(size) + "c.g6";
+    }
     graph *g;
     int m,n,codetype;
     labelorg = 0;
