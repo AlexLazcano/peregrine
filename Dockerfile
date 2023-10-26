@@ -5,6 +5,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV C_INCLUDE_PATH=/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi:/usr/lib/x86_64-linux-gnu/openmpi/include:$C_INCLUDE_PATH
 ENV CXX=g++-10
 ENV DOCKER_CONTAINER=true
+ENV OMPI_ALLOW_RUN_AS_ROOT=1
+ENV OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 # Get dependencies
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     cmake \
