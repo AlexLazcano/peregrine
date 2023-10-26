@@ -710,7 +710,7 @@ namespace Peregrine
     std::string infilename = "";
     // generate filename from size
     if(dockerContainerEnv){
-        infilename = "/pergrine/core/graphs/graph" + std::to_string(size) + "c.g6";
+        infilename = "core/graphs/graph" + std::to_string(size) + "c.g6";
     }else{
         char filename[] = __FILE__;
         char *dir = dirname(filename);
