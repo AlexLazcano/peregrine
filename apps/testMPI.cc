@@ -26,7 +26,6 @@ int main(int argc, char *argv[])
     // Peregrine::VertexQueue queue(100, 1);
     // queue.step = 7;
     // std::pair<uint64_t, uint64_t> range;
-    
 
     // while (queue.curr < queue.end)
     // {
@@ -48,14 +47,24 @@ int main(int argc, char *argv[])
     printf("Rank %d starting request\n", world_rank);
     bool successful = true;
     std::pair<uint64_t, uint64_t> result;
+    int count = 0;
 
-    do
+    while (true)
     {
-        successful = Peregrine::request_range(result, world_rank);
+        successful = Peregrine::request_range(result, world_rank, count);
+        count++;
+        if (!successful)
+        {
+            printf("unsuccessful done processing %d\n", world_rank);
+            break;
+        }
+    }
 
-    } while (successful);
-
-    // coordThread.join();
+    if (world_rank == 0)
+    {
+        printf("joining \n");
+        coordThread.join();
+    }
 
     printf("DONE Process %d\n", world_rank);
 
