@@ -25,7 +25,6 @@ namespace Peregrine
         {
             // Tag 1 - Got more ranges
             MPI_Recv(buffer, 2, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            printf("Consumer %d request num %d:  %ld %ld\n", world_rank, requestNumber, buffer[0], buffer[1]);
             result = std::make_pair(buffer[0], buffer[1]);
             return true;
         }
@@ -38,7 +37,7 @@ namespace Peregrine
         uint64_t curr = 0;
         uint64_t end;
         int number_of_consumers;
-        // std::atomic<uint64_t> curr = 0;
+
         bool get_v_range(std::pair<uint64_t, uint64_t> &range)
         {
             if (this->curr >= this->end)
@@ -64,7 +63,6 @@ namespace Peregrine
 
         VertexQueue(uint64_t last, int numConsumers) : end(last), number_of_consumers(numConsumers)
         {
-            printf("ready %ld %d\n", this->end, this->number_of_consumers);
         }
 
         void coordinate()
@@ -90,15 +88,14 @@ namespace Peregrine
                     buffer[0] = range.first;
                     buffer[1] = range.second;
                     // Tag 1 - size 2
-                    printf("sending range: %ld %ld to %d\n", range.first, range.second, status.MPI_SOURCE);
+
                     MPI_Send(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
                 }
                 else
                 {
-                    // Tag 1 size 1
+                    // Tag 1
                     MPI_Send(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
                     processesFinished++;
-                    printf("%d / %d finished\n", processesFinished, this->number_of_consumers);
                 }
             }
         }

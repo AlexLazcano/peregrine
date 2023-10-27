@@ -51,13 +51,14 @@ int main(int argc, char *argv[])
 
     while (true)
     {
-        successful = Peregrine::request_range(result, world_rank, count);
-        count++;
         if (!successful)
         {
             printf("unsuccessful done processing %d\n", world_rank);
             break;
         }
+        successful = Peregrine::request_range(result, world_rank, count);
+        count++;
+        
     }
 
     if (world_rank == 0)
