@@ -32,12 +32,15 @@ namespace Peregrine
 
     class VertexCoordinator
     {
-    public:
+        private:
         uint64_t step = 10;
         uint64_t curr = 0;
         uint64_t end;
         int number_of_consumers;
-
+        public:
+        bool reset_curr() {
+            this->curr = 0;
+        }
         bool get_v_range(std::pair<uint64_t, uint64_t> &range)
         {
             if (this->curr >= this->end)

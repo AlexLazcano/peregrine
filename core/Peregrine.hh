@@ -19,16 +19,16 @@
   switch (L)\
   {\
     case Graph::LABELLED:\
-      lcount += count_loop<Graph::LABELLED, has_anti_vertices>(dg, cands);\
+      lcount += count_loop<Graph::LABELLED, has_anti_vertices>(dg, cands, world_rank, world_size);\
       break;\
     case Graph::UNLABELLED:\
-      lcount += count_loop<Graph::UNLABELLED, has_anti_vertices>(dg, cands);\
+      lcount += count_loop<Graph::UNLABELLED, has_anti_vertices>(dg, cands, world_rank, world_size);\
       break;\
     case Graph::PARTIALLY_LABELLED:\
-      lcount += count_loop<Graph::PARTIALLY_LABELLED, has_anti_vertices>(dg, cands);\
+      lcount += count_loop<Graph::PARTIALLY_LABELLED, has_anti_vertices>(dg, cands, world_rank, world_size);\
       break;\
     case Graph::DISCOVER_LABELS:\
-      lcount += count_loop<Graph::DISCOVER_LABELS, has_anti_vertices>(dg, cands);\
+      lcount += count_loop<Graph::DISCOVER_LABELS, has_anti_vertices>(dg, cands, world_rank, world_size);\
       break;\
   }\
 }
@@ -115,7 +115,7 @@ namespace Peregrine
   }
 
   template <Graph::Labelling L, bool has_anti_vertices>
-  inline uint64_t count_loop(DataGraph *dg, std::vector<std::vector<uint32_t>> &cands)
+  inline uint64_t count_loop(DataGraph *dg, std::vector<std::vector<uint32_t>> &cands, int world_rank, int world_size)
   {
     uint32_t vgs_count = dg->get_vgs_count();
     uint32_t num_vertices = dg->get_vertex_count();
@@ -135,7 +135,7 @@ namespace Peregrine
     return lcount;
   }
 
-  void count_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b)
+  void count_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, int world_rank, int world_size)
   {
     (void)tid; // unused
 
@@ -158,6 +158,7 @@ namespace Peregrine
 
       if (has_anti_edges)
       {
+        printf("has anti edges\n");
         // unstoppable guarantees no exceptions thrown
         constexpr StoppableOption Stoppable = UNSTOPPABLE;
         constexpr OnTheFlyOption OnTheFly = AT_THE_END;
@@ -179,6 +180,7 @@ namespace Peregrine
       }
       else
       {
+        printf("no anti edges\n");
         if (has_anti_vertices)
         {
           CALL_COUNT_LOOP(L, true);
@@ -1047,6 +1049,9 @@ namespace Peregrine
       new_patterns.assign(patterns.cbegin(), patterns.cend());
     }
 
+   
+    
+
     Barrier barrier(nworkers);
     std::vector<std::jthread> pool;
 
@@ -1069,13 +1074,32 @@ namespace Peregrine
 
     dg->set_rbi(new_patterns.front());
     dg->set_known_labels(new_patterns);
+    if (world_rank == 0)
+    {
+      for (const auto &p : new_patterns)
+      {
+
+        // set new pattern
+        uint32_t vgs_count = dg->get_vgs_count();
+        uint32_t num_vertices = dg->get_vertex_count();
+        uint64_t num_tasks = num_vertices * vgs_count;
+
+        printf("top level num task %ld\n", num_tasks);
+
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
+      return results;
+    }
+    
 
     for (uint32_t i = 0; i < nworkers; ++i)
     {
       pool.emplace_back(count_worker,
           i,
           dg,
-          std::ref(barrier));
+          std::ref(barrier),
+          world_rank, 
+          world_size);
     }
 
     // make sure the threads are all running
@@ -1100,6 +1124,7 @@ namespace Peregrine
       // get counts
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
+      MPI_Barrier(MPI_COMM_WORLD);
     }
     auto t2 = utils::get_timestamp();
 
