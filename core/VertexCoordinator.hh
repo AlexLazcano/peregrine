@@ -33,7 +33,7 @@ namespace Peregrine
     class VertexQueue
     {
     public:
-        uint64_t step = 2;
+        uint64_t step = 10;
         uint64_t curr = 0;
         uint64_t end;
         int number_of_consumers;
@@ -96,6 +96,7 @@ namespace Peregrine
                     // Tag 1
                     MPI_Send(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
                     processesFinished++;
+                    printf("p finished %d / %d\n", processesFinished, this->number_of_consumers);
                 }
             }
         }

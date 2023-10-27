@@ -23,60 +23,41 @@ int main(int argc, char *argv[])
 
     printf("Hello world from process %d, of %d\n", world_rank, world_size);
 
-    // Peregrine::VertexQueue queue(100, 1);
-    // queue.step = 7;
-    // std::pair<uint64_t, uint64_t> range;
-
-    // while (queue.curr < queue.end)
-    // {
-    //     bool succ = queue.get_v_range(range);
-    //     printf("%ld %ld\n", range.first, range.second);
-    // }
-
-    std::thread coordThread;
-
     if (world_rank == 0)
     {
-        coordThread = std::thread(
-            [world_size]()
-            {
-                Peregrine::VertexQueue queue(10, world_size);
+        Peregrine::VertexQueue queue(1000, world_size-1);
                 queue.coordinate();
-            });
     }
-    printf("Rank %d starting request\n", world_rank);
-    bool successful = true;
-    std::pair<uint64_t, uint64_t> result;
-    int count = 0;
-    std::vector<std::pair<uint64_t, uint64_t>> ranges_vector;
-
-    while (true)
+    else
     {
+        printf("Rank %d starting request\n", world_rank);
+        bool successful = true;
+        std::pair<uint64_t, uint64_t> result;
+        int count = 0;
+        std::vector<std::pair<uint64_t, uint64_t>> ranges_vector;
 
-        successful = Peregrine::request_range(result, world_rank, count);
-
-        count++;
-        if (!successful)
+        while (true)
         {
-            printf("unsuccessful done processing %d\n", world_rank);
-            break;
+
+            successful = Peregrine::request_range(result, world_rank, count);
+
+            count++;
+            if (!successful)
+            {
+                printf("unsuccessful done processing %d\n", world_rank);
+                break;
+            }
+            else
+            {
+                printf("%ld %ld \n", result.first, result.second);
+                ranges_vector.emplace_back(result);
+            }
         }
-        else
+
+        for (auto range : ranges_vector)
         {
-            printf("%ld %ld \n", result.first, result.second);
-            ranges_vector.emplace_back(result);
+            printf("%d: %ld %ld\n", world_rank, range.first, range.second);
         }
-    }
-
-    for (auto range : ranges_vector)
-    {
-        printf("%d: %ld %ld\n", world_rank, range.first, range.second);
-    }
-
-    if (world_rank == 0)
-    {
-        printf("joining \n");
-        coordThread.join();
     }
 
     printf("DONE Process %d\n", world_rank);
