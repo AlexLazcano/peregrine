@@ -4,7 +4,7 @@
 #include "mpi.h"
 namespace Peregrine
 {
-    static bool request_range(std::pair<uint64_t, uint64_t> &result, int world_rank, int requestNumber)
+    static bool request_range(std::pair<uint64_t, uint64_t> &result)
     {
 
         MPI_Status status;
