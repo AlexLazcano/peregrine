@@ -48,17 +48,29 @@ int main(int argc, char *argv[])
     bool successful = true;
     std::pair<uint64_t, uint64_t> result;
     int count = 0;
+    std::vector<std::pair<uint64_t, uint64_t>> ranges_vector;
 
     while (true)
     {
+
+        successful = Peregrine::request_range(result, world_rank, count);
+
+        count++;
         if (!successful)
         {
             printf("unsuccessful done processing %d\n", world_rank);
             break;
         }
-        successful = Peregrine::request_range(result, world_rank, count);
-        count++;
-        
+        else
+        {
+            printf("%ld %ld \n", result.first, result.second);
+            ranges_vector.emplace_back(result);
+        }
+    }
+
+    for (auto range : ranges_vector)
+    {
+        printf("%d: %ld %ld\n", world_rank, range.first, range.second);
     }
 
     if (world_rank == 0)
