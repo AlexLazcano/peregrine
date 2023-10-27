@@ -120,8 +120,16 @@ namespace Peregrine
     uint32_t vgs_count = dg->get_vgs_count();
     uint32_t num_vertices = dg->get_vertex_count();
     uint64_t num_tasks = num_vertices * vgs_count;
-
+    std::pair<uint64_t, uint64_t> range;
     uint64_t lcount = 0;
+    bool success = true;
+    
+
+    do
+    {
+      success = Peregrine::request_range(range);
+      printf("success %d: %ld %ld \n", world_rank, range.first, range.second);
+    } while (success);
 
     uint64_t task = 0;
     while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
@@ -158,7 +166,7 @@ namespace Peregrine
 
       if (has_anti_edges)
       {
-        printf("has anti edges\n");
+        // printf("has anti edges\n");
         // unstoppable guarantees no exceptions thrown
         constexpr StoppableOption Stoppable = UNSTOPPABLE;
         constexpr OnTheFlyOption OnTheFly = AT_THE_END;
@@ -180,7 +188,7 @@ namespace Peregrine
       }
       else
       {
-        printf("no anti edges\n");
+        // printf("no anti edges\n");
         if (has_anti_vertices)
         {
           CALL_COUNT_LOOP(L, true);
@@ -1076,7 +1084,7 @@ namespace Peregrine
     dg->set_known_labels(new_patterns);
     if (world_rank == 0)
     {
-      Peregrine::VertexCoordinator coordinator(world_size);
+      Peregrine::VertexCoordinator coordinator(world_size-1);
       auto t1 = utils::get_timestamp();
       for (const auto &p : new_patterns)
       {
@@ -1085,10 +1093,10 @@ namespace Peregrine
         uint32_t vgs_count = dg->get_vgs_count();
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
-        coordinator.update_number_tasks(num_tasks);
-      
-
         printf("top level num task %ld\n", num_tasks);
+        coordinator.update_number_tasks(num_tasks);
+        coordinator.coordinate();
+
 
         coordinator.reset_curr();
         MPI_Barrier(MPI_COMM_WORLD);
