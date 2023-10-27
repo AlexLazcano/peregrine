@@ -44,12 +44,12 @@ int main(int argc, char *argv[])
             count++;
             if (!successful)
             {
-                printf("unsuccessful done processing %d\n", world_rank);
+                // printf("unsuccessful done processing %d\n", world_rank);
                 break;
             }
             else
             {
-                printf("%ld %ld \n", result.first, result.second);
+                // printf("%ld %ld \n", result.first, result.second);
                 ranges_vector.emplace_back(result);
             }
         }
