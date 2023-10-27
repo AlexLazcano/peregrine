@@ -30,6 +30,9 @@ count: apps/count.cc $(OBJ) bliss
 countMPI: apps/count.cc $(OBJ) bliss
 	$(MPICC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
+testMPI: apps/testMPI.cc $(OBJ) bliss
+	$(MPICC) apps/testMPI.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+
 output: apps/output.cc $(OBJ) bliss
 	$(CC) apps/output.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
@@ -48,3 +51,6 @@ clean:
 
 runCount: 
 	mpirun -np 4 bin/countMPI data/citeseer 4-motifs 1
+
+runTest: 
+	mpirun -np 3 bin/testMPI

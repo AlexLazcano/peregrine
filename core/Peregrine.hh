@@ -77,6 +77,7 @@ namespace Peregrine
 #include "aggregators/VectorAggregator.hh"
 #include "aggregators/Aggregator.hh"
 #include "Barrier.hh"
+#include "VertexCoordinator.hh"
 
 namespace Peregrine
 {
