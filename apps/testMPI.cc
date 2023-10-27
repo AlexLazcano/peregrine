@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
     printf("Hello world from process %d, of %d\n", world_rank, world_size);
     if (world_rank == 0)
     {
-        Peregrine::VertexQueue queue(1000, world_size-1);
+        Peregrine::VertexCoordinator queue(1000, world_size-1);
         auto t1 = utils::get_timestamp();
         queue.coordinate();
         auto t2 = utils::get_timestamp();

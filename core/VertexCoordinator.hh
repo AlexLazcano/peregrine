@@ -30,7 +30,7 @@ namespace Peregrine
         }
     }
 
-    class VertexQueue
+    class VertexCoordinator
     {
     public:
         uint64_t step = 10;
@@ -61,7 +61,7 @@ namespace Peregrine
             return true;
         }
 
-        VertexQueue(uint64_t last, int numConsumers) : end(last), number_of_consumers(numConsumers)
+        VertexCoordinator(uint64_t last, int numConsumers) : end(last), number_of_consumers(numConsumers)
         {
         }
 
