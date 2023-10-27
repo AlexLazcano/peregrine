@@ -22,27 +22,40 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
     printf("Hello world from process %d, of %d\n", world_rank, world_size);
-    std::jthread *thread;
+
+    // Peregrine::VertexQueue queue(100, 1);
+    // queue.step = 7;
+    // std::pair<uint64_t, uint64_t> range;
+    
+
+    // while (queue.curr < queue.end)
+    // {
+    //     bool succ = queue.get_v_range(range);
+    //     printf("%ld %ld\n", range.first, range.second);
+    // }
+
+    std::thread coordThread;
 
     if (world_rank == 0)
     {
-
-        thread = new std::jthread([world_size]()
-                                  {
-                                    Peregrine::VertexQueue queue(100, world_size);
-            printf("coord starting\n");
-            queue.coordinate(); });
+        coordThread = std::thread(
+            [world_size]()
+            {
+                Peregrine::VertexQueue queue(10, world_size);
+                queue.coordinate();
+            });
     }
     printf("Rank %d starting request\n", world_rank);
     bool successful = true;
     std::pair<uint64_t, uint64_t> result;
-    while (successful)
-    {
-        // printf("Rank %d requesting\n", world_rank);
-        successful = Peregrine::request_range(&result);
 
-        printf("Rank %d recevied %ld %ld\n", world_rank, result.first, result.second);
-    }
+    do
+    {
+        successful = Peregrine::request_range(result, world_rank);
+
+    } while (successful);
+
+    // coordThread.join();
 
     printf("DONE Process %d\n", world_rank);
 
