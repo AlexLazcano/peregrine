@@ -125,11 +125,15 @@ namespace Peregrine
     bool success = true;
     
 
-    do
+    while (true)
     {
       success = Peregrine::request_range(range);
+      if (!success)
+      {
+        break;
+      }
       printf("success %d: %ld %ld \n", world_rank, range.first, range.second);
-    } while (success);
+    }
 
     uint64_t task = 0;
     while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
