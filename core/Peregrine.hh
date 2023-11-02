@@ -1114,10 +1114,10 @@ namespace Peregrine
       {
         results.emplace_back(std::make_pair(new_patterns[i], counts[i]));
       }
-      for (const auto &[p, v] : results)
-      {
-        std::cout << "Results " << p << ": " << v << std::endl;
-      }
+      // for (const auto &[p, v] : results)
+      // {
+      //   std::cout << "Results " << p << ": " << v << std::endl;
+      // }
 
       if (must_convert_counts)
       {

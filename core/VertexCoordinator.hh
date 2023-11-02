@@ -78,7 +78,6 @@ namespace Peregrine
         }
         VertexCoordinator(int numConsumers, int64_t steps_init) : number_of_consumers(numConsumers), step(steps_init)
         {
-            printf("step: %ld\n", this->step);
         }
 
         void coordinate()
