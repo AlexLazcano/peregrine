@@ -65,7 +65,7 @@ namespace Peregrine
             }
             else
             {
-                last = this->number_tasks;
+                last = this->number_tasks+1;
             }
             range.first = before;
             range.second = last;
