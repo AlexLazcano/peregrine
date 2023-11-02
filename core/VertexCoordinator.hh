@@ -36,7 +36,7 @@ namespace Peregrine
         uint64_t step = 100;
         uint64_t curr = 0;
         uint64_t number_tasks = 0;
-        int number_of_consumers;
+        int number_of_consumers = 0;
 
     public:
         void reset_curr()
@@ -78,6 +78,7 @@ namespace Peregrine
         }
         VertexCoordinator(int numConsumers, int64_t steps_init) : number_of_consumers(numConsumers), step(steps_init)
         {
+            printf("step: %ld\n", this->step);
         }
 
         void coordinate()

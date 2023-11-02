@@ -1087,18 +1087,18 @@ namespace Peregrine
     dg->set_known_labels(new_patterns);
     if (world_rank == 0)
     {
-      Peregrine::VertexCoordinator coordinator(world_size-1);
+      Peregrine::VertexCoordinator coordinator(world_size-1, 100);
       auto t1 = utils::get_timestamp();
       for (const auto &p : new_patterns)
       {
 
         // set new pattern
+        dg->set_rbi(p);
         uint32_t vgs_count = dg->get_vgs_count();
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
         coordinator.update_number_tasks(num_tasks);
         coordinator.coordinate();
-
 
         coordinator.reset_curr();
         MPI_Barrier(MPI_COMM_WORLD);
@@ -1149,7 +1149,7 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    auto t1 = utils::get_timestamp();
+    // auto t1 = utils::get_timestamp();
     for (const auto &p : new_patterns)
     {
       // reset state
@@ -1186,7 +1186,7 @@ namespace Peregrine
       results.emplace_back(p, global_count);
       MPI_Barrier(MPI_COMM_WORLD);
     }
-    auto t2 = utils::get_timestamp();
+    // auto t2 = utils::get_timestamp();
 
 
     barrier.finish();
