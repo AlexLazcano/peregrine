@@ -33,7 +33,7 @@ namespace Peregrine
     class VertexCoordinator
     {
     private:
-        uint64_t step = 10;
+        uint64_t step = 100;
         uint64_t curr = 0;
         uint64_t number_tasks = 0;
         int number_of_consumers;
@@ -46,6 +46,9 @@ namespace Peregrine
         void update_number_tasks(uint64_t numberTasks)
         {
             this->number_tasks = numberTasks;
+        }
+        void update_step(u_int64_t new_step) {
+            this->step = new_step;
         }
         bool get_v_range(std::pair<uint64_t, uint64_t> &range)
         {
@@ -71,6 +74,9 @@ namespace Peregrine
         }
 
         VertexCoordinator(int numConsumers) : number_of_consumers(numConsumers)
+        {
+        }
+        VertexCoordinator(int numConsumers, int64_t steps_init) : number_of_consumers(numConsumers), step(steps_init)
         {
         }
 

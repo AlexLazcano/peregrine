@@ -13,6 +13,7 @@
 #include "Graph.hh"
 #include "PatternGenerator.hh"
 #include "PatternMatching.hh"
+#include "RangeQueue.hh"
 
 #define CALL_COUNT_LOOP(L, has_anti_vertices)\
 {\
@@ -63,6 +64,7 @@ namespace Peregrine
     DataGraph *data_graph;
     std::atomic<uint64_t> task_ctr(0);
     std::atomic<uint64_t> gcount(0);
+    Peregrine::RangeQueue rQueue;
   }
 
   struct flag_t { bool on, working; };
@@ -120,20 +122,20 @@ namespace Peregrine
     uint32_t vgs_count = dg->get_vgs_count();
     uint32_t num_vertices = dg->get_vertex_count();
     uint64_t num_tasks = num_vertices * vgs_count;
-    std::pair<uint64_t, uint64_t> range;
+    // std::pair<uint64_t, uint64_t> range;
     uint64_t lcount = 0;
-    bool success = true;
+    // bool success = true;
     
 
-    while (true)
-    {
-      success = Peregrine::request_range(range);
-      if (!success)
-      {
-        break;
-      }
-      printf("success %d: %ld %ld \n", world_rank, range.first, range.second);
-    }
+    // while (true)
+    // {
+    //   success = Peregrine::request_range(range);
+    //   if (!success)
+    //   {
+    //     break;
+    //   }
+    //   printf("success %d: %ld %ld \n", world_rank, range.first, range.second);
+    // }
 
     uint64_t task = 0;
     while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
@@ -1131,6 +1133,24 @@ namespace Peregrine
       // reset state
       Context::task_ctr = 0;
       Context::gcount = 0;
+      Context::rQueue.resetVector();
+      Peregrine::Range range;
+
+      
+
+      bool success = true;
+
+      while (true)
+      {
+        success = Peregrine::request_range(range);
+        if (!success)
+        {
+          break;
+        }
+        Context::rQueue.addRange(range);
+      }
+      
+      Context::rQueue.printRanges(world_rank);
 
       // set new pattern
       dg->set_rbi(p);
