@@ -65,8 +65,9 @@ int main(int argc, char *argv[])
     {
       std::cout << p << ": " << v << std::endl;
     }
+     printf("DONE Process %d\n", world_rank);
   }
-  printf("DONE Process %d\n", world_rank);
+ 
 
   MPI_Finalize();
   return 0;

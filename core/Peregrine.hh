@@ -132,7 +132,7 @@ namespace Peregrine
       }
 
       Range r = firstRange.value();
-      printf("r %d first: %ld %ld\n", world_rank, r.first, r.second);
+      // printf("r %d first: %ld %ld\n", world_rank, r.first, r.second);
 
       uint64_t task = r.first;
       uint64_t num_tasks = r.second;
@@ -1063,9 +1063,6 @@ namespace Peregrine
       new_patterns.assign(patterns.cbegin(), patterns.cend());
     }
 
-   
-    
-
     Barrier barrier(nworkers);
     std::vector<std::jthread> pool;
 
@@ -1099,7 +1096,6 @@ namespace Peregrine
         uint32_t vgs_count = dg->get_vgs_count();
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
-        printf("top level num task %ld\n", num_tasks);
         coordinator.update_number_tasks(num_tasks);
         coordinator.coordinate();
 
@@ -1108,8 +1104,34 @@ namespace Peregrine
         MPI_Barrier(MPI_COMM_WORLD);
       }
       auto t2 = utils::get_timestamp();
+      std::vector<uint64_t> counts(patterns.size());
+      std::vector<uint64_t> zeros(patterns.size());
+
+      MPI_Reduce(zeros.data(), counts.data(), patterns.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+
+      int numberPatters = patterns.size();
+      for (int i = 0; i < numberPatters; i++)
+      {
+        results.emplace_back(std::make_pair(new_patterns[i], counts[i]));
+      }
+      for (const auto &[p, v] : results)
+      {
+        std::cout << "Results " << p << ": " << v << std::endl;
+      }
+
+      if (must_convert_counts)
+      {
+        results = convert_counts(results, patterns);
+      }
+      
+
+      if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+      {
+        delete dg;
+      }
+
       utils::Log{} << "-------" << "\n";
-      utils::Log{} << "Dist finished after " << (t2-t1)/1e6 << "s" << "\n";
+      utils::Log{} << "DONE patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
       return results;
     }
     
@@ -1147,8 +1169,8 @@ namespace Peregrine
         }
         Context::rQueue.addRange(range);
       }
-      
-      Context::rQueue.printRanges(world_rank);
+
+      // Context::rQueue.printRanges(world_rank);
 
       // set new pattern
       dg->set_rbi(p);
@@ -1166,13 +1188,6 @@ namespace Peregrine
     }
     auto t2 = utils::get_timestamp();
 
-    if (world_rank != 0)
-    {
-      for (const auto &[pat, v] : results)
-      {
-        std::cout << "rank " << world_rank << " - " << pat << ": " << v << std::endl;
-      }
-    }
 
     barrier.finish();
     for (auto &th : pool)
@@ -1180,18 +1195,21 @@ namespace Peregrine
       th.join();
     }
 
-    if (must_convert_counts)
+    std::vector<uint64_t> sendBuffer;
+    for (const auto &res : results)
     {
-      results = convert_counts(results, patterns);
+      sendBuffer.emplace_back(res.second);
     }
+
+    MPI_Reduce(sendBuffer.data(), NULL, sendBuffer.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
     {
       delete dg;
     }
 
-    utils::Log{} << "-------" << "\n";
-    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+    // utils::Log{} << "-------" << "\n";
+    // utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
 
     return results;

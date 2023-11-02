@@ -82,14 +82,14 @@ namespace Peregrine
 
         void coordinate()
         {
-            printf("coordinating\n");
+            // printf("coordinating\n");
             int processesFinished = 0;
             MPI_Status status;
             // std::vector<uint64_t> buffer(2);
             uint64_t buffer[2];
             std::pair<uint64_t, uint64_t> range;
             bool success;
-            printf("number of conusumer: %d tasks %ld\n", this->number_of_consumers, this->number_tasks);
+            // printf("number of conusumer: %d tasks %ld\n", this->number_of_consumers, this->number_tasks);
             while (processesFinished < this->number_of_consumers)
             {
                 // Tag 0 - Receive empty message and see who its from
@@ -110,7 +110,7 @@ namespace Peregrine
                     // Tag 1
                     MPI_Send(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
                     processesFinished++;
-                    printf("p finished %d / %d\n", processesFinished, this->number_of_consumers);
+                    // printf("p finished %d / %d\n", processesFinished, this->number_of_consumers);
                 }
             }
         }
