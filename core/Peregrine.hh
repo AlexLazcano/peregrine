@@ -1136,8 +1136,6 @@ namespace Peregrine
       Context::rQueue.resetVector();
       Peregrine::Range range;
 
-      
-
       bool success = true;
 
       while (true)
@@ -1167,6 +1165,14 @@ namespace Peregrine
       MPI_Barrier(MPI_COMM_WORLD);
     }
     auto t2 = utils::get_timestamp();
+
+    if (world_rank != 0)
+    {
+      for (const auto &[pat, v] : results)
+      {
+        std::cout << "rank " << world_rank << " - " << pat << ": " << v << std::endl;
+      }
+    }
 
     barrier.finish();
     for (auto &th : pool)
