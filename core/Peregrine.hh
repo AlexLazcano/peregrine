@@ -120,30 +120,30 @@ namespace Peregrine
   inline uint64_t count_loop(DataGraph *dg, std::vector<std::vector<uint32_t>> &cands, int world_rank, int world_size)
   {
     uint32_t vgs_count = dg->get_vgs_count();
-    uint32_t num_vertices = dg->get_vertex_count();
-    uint64_t num_tasks = num_vertices * vgs_count;
-    // std::pair<uint64_t, uint64_t> range;
+    // uint32_t num_vertices = dg->get_vertex_count();
+    // uint64_t num_tasks = num_vertices * vgs_count;
     uint64_t lcount = 0;
-    // bool success = true;
-    
-
-    // while (true)
-    // {
-    //   success = Peregrine::request_range(range);
-    //   if (!success)
-    //   {
-    //     break;
-    //   }
-    //   printf("success %d: %ld %ld \n", world_rank, range.first, range.second);
-    // }
-
-    uint64_t task = 0;
-    while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
+    while (true)
     {
-      uint32_t v = (task-1) / vgs_count + 1;
-      uint32_t vgsi = task % vgs_count;
-      Counter<has_anti_vertices> m(dg->rbi, dg, vgsi, cands);
-      lcount += m.template map_into<L>(v);
+      std::optional<Range> firstRange = Context::rQueue.popFirstRange();
+      if (!firstRange.has_value())
+      {
+        return lcount;
+      }
+
+      Range r = firstRange.value();
+      printf("r %d first: %ld %ld\n", world_rank, r.first, r.second);
+
+      uint64_t task = r.first;
+      uint64_t num_tasks = r.second;
+      while (task < num_tasks)
+      {
+        uint32_t v = task / vgs_count + 1;
+        uint32_t vgsi = task % vgs_count;
+        Counter<has_anti_vertices> m(dg->rbi, dg, vgsi, cands);
+        lcount += m.template map_into<L>(v);
+        task++;
+      }
     }
 
     return lcount;
