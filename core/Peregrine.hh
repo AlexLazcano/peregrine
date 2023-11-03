@@ -20,16 +20,16 @@
   switch (L)\
   {\
     case Graph::LABELLED:\
-      lcount += count_loop<Graph::LABELLED, has_anti_vertices>(dg, cands, world_rank, world_size);\
+      lcount += count_loop<Graph::LABELLED, has_anti_vertices>(dg, cands);\
       break;\
     case Graph::UNLABELLED:\
-      lcount += count_loop<Graph::UNLABELLED, has_anti_vertices>(dg, cands, world_rank, world_size);\
+      lcount += count_loop<Graph::UNLABELLED, has_anti_vertices>(dg, cands);\
       break;\
     case Graph::PARTIALLY_LABELLED:\
-      lcount += count_loop<Graph::PARTIALLY_LABELLED, has_anti_vertices>(dg, cands, world_rank, world_size);\
+      lcount += count_loop<Graph::PARTIALLY_LABELLED, has_anti_vertices>(dg, cands);\
       break;\
     case Graph::DISCOVER_LABELS:\
-      lcount += count_loop<Graph::DISCOVER_LABELS, has_anti_vertices>(dg, cands, world_rank, world_size);\
+      lcount += count_loop<Graph::DISCOVER_LABELS, has_anti_vertices>(dg, cands);\
       break;\
   }\
 }
@@ -117,7 +117,7 @@ namespace Peregrine
   }
 
   template <Graph::Labelling L, bool has_anti_vertices>
-  inline uint64_t count_loop(DataGraph *dg, std::vector<std::vector<uint32_t>> &cands, int world_rank, int world_size)
+  inline uint64_t count_loop(DataGraph *dg, std::vector<std::vector<uint32_t>> &cands)
   {
     uint32_t vgs_count = dg->get_vgs_count();
     // uint32_t num_vertices = dg->get_vertex_count();
@@ -149,7 +149,7 @@ namespace Peregrine
     return lcount;
   }
 
-  void count_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, int world_rank, int world_size)
+  void count_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b)
   {
     (void)tid; // unused
 
@@ -1141,9 +1141,7 @@ namespace Peregrine
       pool.emplace_back(count_worker,
           i,
           dg,
-          std::ref(barrier),
-          world_rank, 
-          world_size);
+          std::ref(barrier));
     }
 
     // make sure the threads are all running
