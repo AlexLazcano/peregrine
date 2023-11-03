@@ -24,6 +24,12 @@ existence-query: apps/existence-query.cc $(OBJ) bliss
 enumerate: apps/enumerate.cc $(OBJ) bliss
 	$(CC) apps/enumerate.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
+enumMPI: apps/enumerate.cc $(OBJ) bliss
+	$(MPICC) apps/enumerate.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+
+match: apps/match.cc $(OBJ) bliss
+	$(MPICC) apps/match.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+
 count: apps/count.cc $(OBJ) bliss
 	$(CC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 

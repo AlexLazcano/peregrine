@@ -96,6 +96,16 @@ namespace Peregrine
     uint32_t num_vertices = dg->get_vertex_count();
     uint64_t num_tasks = num_vertices * vgs_count;
 
+    // while (true)
+    // {
+    //   std::optional<Range> firstRange = Context::rQueue.popFirstRange();
+    //   if (!firstRange.has_value())
+    //   {
+    //     break;
+    //   }
+    //   Range r = firstRange.value();
+    // }
+
     uint64_t task = 0;
     while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
     {
@@ -426,23 +436,23 @@ namespace Peregrine
       std::vector<std::tuple<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>())), std::filesystem::path>>,
       std::vector<std::pair<OutputKeyType<AggKeyT>, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>>>;
 
-
   template <
-    typename AggKeyT,
-    typename GivenAggValueT,
-    OnTheFlyOption OnTheFly,
-    StoppableOption Stoppable,
-    typename DataGraphT,
-    typename PF,
-    typename VF = decltype(default_viewer<GivenAggValueT>),
-    OutputOption Output = NONE
-  >
+      typename AggKeyT,
+      typename GivenAggValueT,
+      OnTheFlyOption OnTheFly,
+      StoppableOption Stoppable,
+      typename DataGraphT,
+      typename PF,
+      typename VF = decltype(default_viewer<GivenAggValueT>),
+      OutputOption Output = NONE>
   ResultType<Output, VF, AggKeyT, GivenAggValueT>
   match(DataGraphT &&data_graph,
-      const std::vector<SmallGraph> &patterns,
-      uint32_t nworkers,
-      PF &&process,
-      VF viewer = default_viewer<GivenAggValueT>)
+        const std::vector<SmallGraph> &patterns,
+        uint32_t nworkers,
+        PF &&process,
+        int world_rank,
+        int world_size,
+        VF viewer = default_viewer<GivenAggValueT>)
   {
     if (patterns.empty())
     {
@@ -507,6 +517,53 @@ namespace Peregrine
           case Graph::DISCOVER_LABELS:
             multi.emplace_back(p);
             break;
+        }
+      }
+      if (world_rank == 0)
+      {
+        DataGraph *dg(Context::data_graph);
+        Peregrine::VertexCoordinator coordinator(world_size - 1, 100);
+
+        for (const auto &p : single)
+        {
+          Context::data_graph->set_rbi(p);
+
+          uint32_t vgs_count = dg->get_vgs_count();
+          uint32_t num_vertices = dg->get_vertex_count();
+          uint64_t num_tasks = num_vertices * vgs_count;
+          coordinator.update_step(std::floor(num_tasks * 0.10));
+          coordinator.update_number_tasks(num_tasks);
+          coordinator.coordinate();
+
+          coordinator.reset_curr();
+
+          MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+        if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+        {
+          delete Context::data_graph;
+        }
+
+        return result;
+      }
+
+      if (world_rank == 1)
+      {
+        printf("single: \n");
+        for (const auto &p : single)
+        {
+          std::cout << p << std::endl;
+        }
+        printf("vector: \n");
+        for (const auto &p : vector)
+        {
+          std::cout << p << std::endl;
+        }
+        printf("multi: \n");
+        for (const auto &p : multi)
+        {
+          std::cout << p << std::endl;
         }
       }
 
@@ -747,6 +804,24 @@ namespace Peregrine
       // reset state
       Context::task_ctr = 0;
 
+
+      Context::rQueue.resetVector();
+      Peregrine::Range range;
+
+      bool success = true;
+
+      while (true)
+      {
+        success = Peregrine::request_range(range);
+        if (!success)
+        {
+          break;
+        }
+        Context::rQueue.addRange(range);
+      }
+      std::cout << "pattern: " << p << std::endl;
+      Context::rQueue.printRanges(1);
+
       // set new pattern
       dg->set_rbi(p);
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
@@ -821,6 +896,7 @@ namespace Peregrine
       {
         results.emplace_back(p, v);
       }
+      MPI_Barrier(MPI_COMM_WORLD);
     }
     auto t2 = utils::get_timestamp();
 
