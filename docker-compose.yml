@@ -1,0 +1,27 @@
+version: '3'
+services:
+  node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: node-1
+    networks:
+      - peregrine_network
+    environment:
+      - MPI_RANK=0
+      - MPI_TOTAL_PROCESSES=4
+
+  node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: node-2
+    networks:
+      - peregrine_network
+    environment:
+      - MPI_RANK=1
+      - MPI_TOTAL_PROCESSES=4
+
+networks:
+  peregrine_network:
+    driver: bridge
