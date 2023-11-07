@@ -23,14 +23,31 @@ int main(int argc, char const *argv[])
             rq.addRange(r);
         }
         rq.printRanges();
-        
-        
-    } else { 
+
+        while (!rq.isQueueEmpty())
+        {
+            rq.checkRobbers();
+
+            rq.popFirstRange();
+        }
+
+        rq.checkRobbers();
+    } else {
 
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        rq.stealRange();
+        while (true)
+        {
+            auto res = rq.stealRange();
 
+            if (!res.has_value())
+            {
+                break;
+            }
+
+            Peregrine::Range range = res.value();
+            printf("stole %ld %ld\n", range.first, range.second);
+        }
     }
     
 

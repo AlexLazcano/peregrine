@@ -28,7 +28,7 @@ namespace Peregrine
         void printRanges();
         std::optional<Range> stealRange();
         void checkRobbers();
-        
+        bool isQueueEmpty();
     };
 
     void RangeQueue::addRange(Range r) {
@@ -81,12 +81,32 @@ namespace Peregrine
     {
     
         uint64_t buffer[2];
+        MPI_Status status;
+        int count;
         for (int i = 0; i < world_size; i++)
         {
             if (i == world_rank)
+            {
                 continue;
+            }
 
-                MPI_Send(&buffer, 1, MPI_UINT64_T, i, 5, MPI_COMM_WORLD);
+            MPI_Send(&buffer, 1, MPI_UINT64_T, i, 5, MPI_COMM_WORLD);
+            MPI_Probe(i, 6, MPI_COMM_WORLD, &status);
+            MPI_Get_count(&status, MPI_UINT64_T, &count);
+            if (count == 1)
+            {
+                // Tag 6 - Returns false since could not get any more ranges
+                MPI_Recv(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                return std::nullopt;
+            }
+            else
+            {
+                // Tag 6 - Got more ranges
+                MPI_Recv(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                auto result = std::make_pair(buffer[0], buffer[1]);
+                return result;
+            }
 
             printf("trying to steal from process %d\n", i);
         }
@@ -97,9 +117,30 @@ namespace Peregrine
     void RangeQueue::checkRobbers()
     {
         MPI_Status status;
-        int64_t buffer[2];
+        int64_t buffer[2] = {0};
 
         MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 5, MPI_COMM_WORLD, &status);
+
+        auto maybeRange = popLastRange();
+
+        if (maybeRange.has_value())
+        {
+
+            Range range = maybeRange.value();
+            buffer[0] = range.first;
+            buffer[1] = range.second;
+
+            MPI_Send(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD);
+        }
+        else
+        { 
+            MPI_Send(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD);
+        }
+    }
+
+    inline bool RangeQueue::isQueueEmpty()
+    {
+        return this->range_queue.empty();
     }
 
     RangeQueue::RangeQueue(int world_rank, int world_size)
