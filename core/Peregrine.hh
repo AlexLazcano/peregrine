@@ -8,11 +8,12 @@
 #include <condition_variable>
 #include <filesystem>
 #include <memory>
-#include <mpi.h>
+#include "mpi.h"
 #include "Options.hh"
 #include "Graph.hh"
 #include "PatternGenerator.hh"
 #include "PatternMatching.hh"
+#include "RangeQueue.hh"
 
 #define CALL_COUNT_LOOP(L, has_anti_vertices)\
 {\
@@ -63,6 +64,7 @@ namespace Peregrine
     DataGraph *data_graph;
     std::atomic<uint64_t> task_ctr(0);
     std::atomic<uint64_t> gcount(0);
+    Peregrine::RangeQueue rQueue;
   }
 
   struct flag_t { bool on, working; };
@@ -77,6 +79,7 @@ namespace Peregrine
 #include "aggregators/VectorAggregator.hh"
 #include "aggregators/Aggregator.hh"
 #include "Barrier.hh"
+#include "VertexCoordinator.hh"
 
 namespace Peregrine
 {
@@ -92,6 +95,16 @@ namespace Peregrine
     uint32_t vgs_count = dg->get_vgs_count();
     uint32_t num_vertices = dg->get_vertex_count();
     uint64_t num_tasks = num_vertices * vgs_count;
+
+    // while (true)
+    // {
+    //   std::optional<Range> firstRange = Context::rQueue.popFirstRange();
+    //   if (!firstRange.has_value())
+    //   {
+    //     break;
+    //   }
+    //   Range r = firstRange.value();
+    // }
 
     uint64_t task = 0;
     while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
@@ -117,101 +130,33 @@ namespace Peregrine
   inline uint64_t count_loop(DataGraph *dg, std::vector<std::vector<uint32_t>> &cands)
   {
     uint32_t vgs_count = dg->get_vgs_count();
-    uint32_t num_vertices = dg->get_vertex_count();
-    uint64_t num_tasks = num_vertices * vgs_count;
-
+    // uint32_t num_vertices = dg->get_vertex_count();
+    // uint64_t num_tasks = num_vertices * vgs_count;
     uint64_t lcount = 0;
-
-    uint64_t task = 0;
-    while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
+    while (true)
     {
-      uint32_t v = (task-1) / vgs_count + 1;
-      uint32_t vgsi = task % vgs_count;
-      Counter<has_anti_vertices> m(dg->rbi, dg, vgsi, cands);
-      lcount += m.template map_into<L>(v);
+      std::optional<Range> firstRange = Context::rQueue.popFirstRange();
+      if (!firstRange.has_value())
+      {
+        return lcount;
+      }
+
+      Range r = firstRange.value();
+      // printf("r %d first: %ld %ld\n", world_rank, r.first, r.second);
+
+      uint64_t task = r.first;
+      uint64_t num_tasks = r.second;
+      while (task < num_tasks)
+      {
+        uint32_t v = task / vgs_count + 1;
+        uint32_t vgsi = task % vgs_count;
+        Counter<has_anti_vertices> m(dg->rbi, dg, vgsi, cands);
+        lcount += m.template map_into<L>(v);
+        task++;
+      }
     }
 
     return lcount;
-  }
-
-  void pattern_coordinator(const int vector_size, int world_size)
-  {
-    printf("running coord\n");
-    // This thread should wait for another node to ask for a pattern then return it a pattern.
-    int currIndex = 0;
-    int buffer;
-    
-    MPI_Status status;
-    int finished = 0;
-    int res;
-    while (finished < world_size)
-    {
-      // Tag 0 Recv - FIX: sometimes invalid communicator
-      res = MPI_Recv(&buffer, 0, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-      // printf("recv res: %d\n", res);
-      int source = status.MPI_SOURCE;
-  
-      buffer = currIndex < vector_size ? currIndex : -1;
-      // printf("rec req from %d: buffer: %d\n", source, buffer);
-      do
-      {
-        // Tag 1 Send
-        res = MPI_Send(&buffer, 1, MPI_INT, source, 1, MPI_COMM_WORLD);
-      } while (res != 0);
-
-      if (!(currIndex < vector_size))
-      {
-         finished++;
-      }
-      // printf("current index: %d\n", currIndex);
-      currIndex++; // TODO: Change chunk size to handle more course grained 
-    }
-    printf("coordinator has finished\n");
-  }
-
-  void result_receiver(int world_size, std::vector<std::pair<int64_t, uint64_t>> &results){
-  MPI_Status status;
-  int countOfMessage;
-  printf("p0 receiving\n");
-  
-  int res;
-  for (int p = 0; p < world_size-1; p++)
-  {
-    // causing abort, incomplete ?
-    res = MPI_Probe(MPI_ANY_SOURCE, 2, MPI_COMM_WORLD, &status);
-    
-    MPI_Get_count(&status, MPI_UINT64_T, &countOfMessage);
-    // printf("res: %d size: %d  from: %d\n", res, countOfMessage, status.MPI_ERROR);
-
-    std::vector<int64_t> msg_buffer(countOfMessage);
-    // int64_t msg_buffer[countOfMessage];
-    // Tag 2 recv - has assertion failed
-    MPI_Recv(msg_buffer.data(), countOfMessage, MPI_INT64_T, status.MPI_SOURCE, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-    for (int i = 0; i < countOfMessage; i+=2)
-    {
-      results.emplace_back(msg_buffer[i], (uint64_t) msg_buffer[i+1]);
-    }
-  }
- }
-  // index -1 means no more
-  // index 0 means received an index
-  int request_pattern(int world_rank) { 
-    int nextPatternIndex;
-    int res;
-    int dummy = 0;
-    do
-    {
-      //Tag 0 Send
-      res = MPI_Send(&dummy, 0, MPI_INT, 0, 0, MPI_COMM_WORLD);
-    } while (res != 0);
-    
-    // This sometimes fails? 
-    // Tag 1 Recv
-    res = MPI_Recv(&nextPatternIndex, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    printf("RECV %d at %d\n", nextPatternIndex, world_rank);
-    return nextPatternIndex;
-    
   }
 
   void count_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b)
@@ -237,6 +182,7 @@ namespace Peregrine
 
       if (has_anti_edges)
       {
+        // printf("has anti edges\n");
         // unstoppable guarantees no exceptions thrown
         constexpr StoppableOption Stoppable = UNSTOPPABLE;
         constexpr OnTheFlyOption OnTheFly = AT_THE_END;
@@ -258,6 +204,7 @@ namespace Peregrine
       }
       else
       {
+        // printf("no anti edges\n");
         if (has_anti_vertices)
         {
           CALL_COUNT_LOOP(L, true);
@@ -489,23 +436,23 @@ namespace Peregrine
       std::vector<std::tuple<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>())), std::filesystem::path>>,
       std::vector<std::pair<OutputKeyType<AggKeyT>, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>>>;
 
-
   template <
-    typename AggKeyT,
-    typename GivenAggValueT,
-    OnTheFlyOption OnTheFly,
-    StoppableOption Stoppable,
-    typename DataGraphT,
-    typename PF,
-    typename VF = decltype(default_viewer<GivenAggValueT>),
-    OutputOption Output = NONE
-  >
+      typename AggKeyT,
+      typename GivenAggValueT,
+      OnTheFlyOption OnTheFly,
+      StoppableOption Stoppable,
+      typename DataGraphT,
+      typename PF,
+      typename VF = decltype(default_viewer<GivenAggValueT>),
+      OutputOption Output = NONE>
   ResultType<Output, VF, AggKeyT, GivenAggValueT>
   match(DataGraphT &&data_graph,
-      const std::vector<SmallGraph> &patterns,
-      uint32_t nworkers,
-      PF &&process,
-      VF viewer = default_viewer<GivenAggValueT>)
+        const std::vector<SmallGraph> &patterns,
+        uint32_t nworkers,
+        PF &&process,
+        int world_rank,
+        int world_size,
+        VF viewer = default_viewer<GivenAggValueT>)
   {
     if (patterns.empty())
     {
@@ -570,6 +517,53 @@ namespace Peregrine
           case Graph::DISCOVER_LABELS:
             multi.emplace_back(p);
             break;
+        }
+      }
+      if (world_rank == 0)
+      {
+        DataGraph *dg(Context::data_graph);
+        Peregrine::VertexCoordinator coordinator(world_size - 1, 100);
+
+        for (const auto &p : single)
+        {
+          Context::data_graph->set_rbi(p);
+
+          uint32_t vgs_count = dg->get_vgs_count();
+          uint32_t num_vertices = dg->get_vertex_count();
+          uint64_t num_tasks = num_vertices * vgs_count;
+          coordinator.update_step(std::floor(num_tasks * 0.10));
+          coordinator.update_number_tasks(num_tasks);
+          coordinator.coordinate();
+
+          coordinator.reset_curr();
+
+          MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+        if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+        {
+          delete Context::data_graph;
+        }
+
+        return result;
+      }
+
+      if (world_rank == 1)
+      {
+        printf("single: \n");
+        for (const auto &p : single)
+        {
+          std::cout << p << std::endl;
+        }
+        printf("vector: \n");
+        for (const auto &p : vector)
+        {
+          std::cout << p << std::endl;
+        }
+        printf("multi: \n");
+        for (const auto &p : multi)
+        {
+          std::cout << p << std::endl;
         }
       }
 
@@ -810,6 +804,24 @@ namespace Peregrine
       // reset state
       Context::task_ctr = 0;
 
+
+      Context::rQueue.resetVector();
+      Peregrine::Range range;
+
+      bool success = true;
+
+      while (true)
+      {
+        success = Peregrine::request_range(range);
+        if (!success)
+        {
+          break;
+        }
+        Context::rQueue.addRange(range);
+      }
+      std::cout << "pattern: " << p << std::endl;
+      Context::rQueue.printRanges(1);
+
       // set new pattern
       dg->set_rbi(p);
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
@@ -884,6 +896,7 @@ namespace Peregrine
       {
         results.emplace_back(p, v);
       }
+      MPI_Barrier(MPI_COMM_WORLD);
     }
     auto t2 = utils::get_timestamp();
 
@@ -1080,8 +1093,7 @@ namespace Peregrine
   count(DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns, uint32_t nworkers, int world_rank, int world_size)
   {
     // initialize
-    std::vector<std::pair<SmallGraph, uint64_t>> results(patterns.size());
-    std::vector<std::pair<int64_t, uint64_t>> local_results;
+    std::vector<std::pair<SmallGraph, uint64_t>> results;
     if (patterns.empty()) return results;
 
     // optimize if all unlabelled vertex-induced patterns of a certain size
@@ -1149,6 +1161,56 @@ namespace Peregrine
 
     dg->set_rbi(new_patterns.front());
     dg->set_known_labels(new_patterns);
+    if (world_rank == 0)
+    {
+      Peregrine::VertexCoordinator coordinator(world_size-1, 100);
+      auto t1 = utils::get_timestamp();
+      for (const auto &p : new_patterns)
+      {
+
+        // set new pattern
+        dg->set_rbi(p);
+        uint32_t vgs_count = dg->get_vgs_count();
+        uint32_t num_vertices = dg->get_vertex_count();
+        uint64_t num_tasks = num_vertices * vgs_count;
+        coordinator.update_number_tasks(num_tasks);
+        coordinator.coordinate();
+
+        coordinator.reset_curr();
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
+      auto t2 = utils::get_timestamp();
+      std::vector<uint64_t> counts(patterns.size());
+      std::vector<uint64_t> zeros(patterns.size());
+
+      MPI_Reduce(zeros.data(), counts.data(), patterns.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+
+      int numberPatters = patterns.size();
+      for (int i = 0; i < numberPatters; i++)
+      {
+        results.emplace_back(std::make_pair(new_patterns[i], counts[i]));
+      }
+      // for (const auto &[p, v] : results)
+      // {
+      //   std::cout << "Results " << p << ": " << v << std::endl;
+      // }
+
+      if (must_convert_counts)
+      {
+        results = convert_counts(results, patterns);
+      }
+      
+
+      if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+      {
+        delete dg;
+      }
+
+      utils::Log{} << "-------" << "\n";
+      utils::Log{} << "DONE patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+      return results;
+    }
+    
 
     for (uint32_t i = 0; i < nworkers; ++i)
     {
@@ -1161,34 +1223,28 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    std::jthread* coordinator = nullptr;
-    if (world_rank == 0)
+    // auto t1 = utils::get_timestamp();
+    for (const auto &p : new_patterns)
     {
-      // if rank == 0 then make a jthread that handles pattern distribution
-      printf("number of patterns: %ld \n", patterns.size());
-      int size = patterns.size();
-      coordinator = new std::jthread([size, world_size]() {
-        pattern_coordinator(size, world_size);
-      });
-      
-    }
-   
-
-    auto t1 = utils::get_timestamp();
-    int64_t index;
-
-    std::vector<SmallGraph> local_patterns;
-    while (true)
-    {
-      index = request_pattern(world_rank);
-      if (index == -1)
-      {
-        break;
-      }
+      // reset state
       Context::task_ctr = 0;
       Context::gcount = 0;
-      //Use pattern from coordinator 
-      auto& p = new_patterns[index];
+      Context::rQueue.resetVector();
+      Peregrine::Range range;
+
+      bool success = true;
+
+      while (true)
+      {
+        success = Peregrine::request_range(range);
+        if (!success)
+        {
+          break;
+        }
+        Context::rQueue.addRange(range);
+      }
+
+      // Context::rQueue.printRanges(world_rank);
 
       // set new pattern
       dg->set_rbi(p);
@@ -1201,77 +1257,36 @@ namespace Peregrine
 
       // get counts
       uint64_t global_count = Context::gcount;
-      // results.emplace_back(p, global_count);
-      local_results.emplace_back(index, global_count);
-      local_patterns.emplace_back(p);
+      results.emplace_back(p, global_count);
+      MPI_Barrier(MPI_COMM_WORLD);
     }
-    
-    auto t2 = utils::get_timestamp();
+    // auto t2 = utils::get_timestamp();
+
 
     barrier.finish();
-
     for (auto &th : pool)
     {
       th.join();
     }
-    printf("P%d done searching\n", world_rank);
-    
-    
-    int local_size = local_patterns.size();
-    printf("PROCESS %d has %d patterns\n", world_rank, local_size);
 
-    if (world_rank != 0 && local_patterns.empty())
+    std::vector<uint64_t> sendBuffer;
+    for (const auto &res : results)
     {
-      return results;
+      sendBuffer.emplace_back(res.second);
     }
 
-    if (world_rank == 0)
+    MPI_Reduce(sendBuffer.data(), NULL, sendBuffer.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
     {
-
-      result_receiver(world_size, local_results);
-     
-
-      for (auto& pair : local_results) {
-        
-        results[pair.first] = std::make_pair(new_patterns[pair.first], pair.second);
-       
-      }
-      // printf("SYNCED: Received all \n");
-      coordinator->join();
-      delete coordinator;
-      printf("deleted coordinator\n");
-      if (must_convert_counts)
-      {
-        results = convert_counts(results, patterns);
-      }
-
-      if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
-      {
-        delete dg;
-      }
-
-      utils::Log{} << "-------" << "\n";
-      utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
-      return results; 
-    } else { 
-      std::vector<int64_t> send_buffer;
-      
-      for (int i = 0; i < local_size; i++)
-      {
-        // printf("%d emplaced %ld %ld\n", world_rank, local_results[i].first, local_results[i].second);
-        send_buffer.emplace_back(local_results[i].first);
-        send_buffer.emplace_back((int64_t) local_results[i].second);
-      }
-      // printf("SENDING p%d len: %ld\n", world_rank, send_buffer.size());
-      // Tag 2 Send
-      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_INT64_T, 0, 2, MPI_COMM_WORLD);
-      
-      if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
-      {
-        delete dg;
-      }
-      return results;
+      delete dg;
     }
+
+    // utils::Log{} << "-------" << "\n";
+    // utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+
+
+    return results;
   }
 
   template <
