@@ -34,73 +34,31 @@ namespace Peregrine
     {
     private:
         uint64_t step;
-        uint64_t curr = 0;
+        std::atomic<uint64_t> curr = 0;
         uint64_t number_tasks = 0;
         int number_of_consumers;
+        std::atomic<int> processesFinished = 0;
+        bool finished = false;
 
-    public:
-        void reset_curr()
-        {
-            this->curr = 0;
-        }
-        void update_number_tasks(uint64_t numberTasks)
-        {
-            this->number_tasks = numberTasks;
-        }
-        void update_step(u_int64_t new_step) {
-            this->step = new_step;
-        }
-        bool get_v_range(std::pair<uint64_t, uint64_t> &range)
-        {
-            if (this->curr >= this->number_tasks)
-            {
-                return false;
-            }
-            uint64_t before = this->curr;
-            uint64_t last;
-
-            if (before + this->step < this->number_tasks)
-            {
-                last = before + this->step;
-            }
-            else
-            {
-                last = this->number_tasks+1;
-            }
-            range.first = before;
-            range.second = last;
-            this->curr += this->step;
-            return true;
-        }
-
-        VertexCoordinator(int numConsumers) : number_of_consumers(numConsumers)
-        {
-            this->step = 100;
-        }
-        VertexCoordinator(int numConsumers, int64_t steps_init) : number_of_consumers(numConsumers), step(steps_init)
-        {
-        }
-
-        void coordinate()
+        void coordinateWorker(int id)
         {
             // printf("coordinating\n");
             int processesFinished = 0;
             MPI_Status status;
             // std::vector<uint64_t> buffer(2);
             uint64_t buffer[2];
-            std::pair<uint64_t, uint64_t> range;
-            bool success;
+            
             // printf("number of conusumer: %d tasks %ld\n", this->number_of_consumers, this->number_tasks);
             while (processesFinished < this->number_of_consumers)
             {
                 // Tag 0 - Receive empty message and see who its from
                 MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
 
-                success = this->get_v_range(range);
+                auto maybeRange = this->get_v_range(id);
 
-                if (success)
+                if (maybeRange.has_value())
                 {
-
+                    Range range = maybeRange.value();
                     buffer[0] = range.first;
                     buffer[1] = range.second;
                     // Tag 1 - size 2
@@ -113,6 +71,73 @@ namespace Peregrine
                     processesFinished++;
                     // printf("p finished %d / %d\n", processesFinished, this->number_of_consumers);
                 }
+            }
+        }
+
+    public:
+        void reset()
+        {
+            this->curr = 0;
+            this->processesFinished = 0;
+        }
+
+        void update_number_tasks(uint64_t numberTasks)
+        {
+            this->number_tasks = numberTasks;
+        }
+        void update_step(u_int64_t new_step) {
+            this->step = new_step;
+        }
+        std::optional<Range> get_v_range(int id)
+        {
+            uint64_t before = this->curr.fetch_add(this->step);
+            if (before >= this->number_tasks)
+            {
+                return std::nullopt;
+            }
+            uint64_t last;
+
+            if (before + this->step < this->number_tasks)
+            {
+                last = before + this->step;
+            }
+            else
+            {
+                last = this->number_tasks+1;
+            }
+
+            printf("%d range: %ld %ld \n", id, before, last);
+            // range.first = before;
+            // range.second = last;
+            // this->curr += this->step;
+            return Range(before, last);
+        }
+
+        VertexCoordinator(int numConsumers) : number_of_consumers(numConsumers)
+        {
+            this->step = 100;
+        }
+        VertexCoordinator(int numConsumers, int64_t steps_init) : number_of_consumers(numConsumers), step(steps_init)
+        {
+        }
+
+        void coordinate(int nWorkers)
+        {
+            std::vector<std::thread> pool;
+
+            auto w = [this](int id)
+            {
+                this->coordinateWorker(id);
+            };
+
+            for (int i = 0; i < nWorkers; i++)
+            {
+                pool.emplace_back(w, i);
+            }
+
+            for (auto &th : pool)
+            {
+                th.join();
             }
         }
     };

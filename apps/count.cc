@@ -25,9 +25,20 @@ int main(int argc, char *argv[])
   const std::string pattern_name(argv[2]);
   size_t nthreads = argc < 4 ? 1 : std::stoi(argv[3]);
   int world_rank, world_size;
-  MPI_Init(NULL, NULL);
+  int provided;
+  int threaded = MPI_THREAD_SERIALIZED;
+  MPI_Init_thread(NULL, NULL, threaded, &provided);
+
+  if(provided < threaded) { 
+    std::cerr << "Current Threaded Not supported\n";
+    MPI_Finalize();
+    return 1;
+  }
+  // MPI_Init(NULL, NULL);
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+  printf("provided %d \n", provided );
 
   printf("Hello world from process %d, of %d. Thread num: %ld \n", world_rank, world_size, nthreads);
 

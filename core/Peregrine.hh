@@ -550,9 +550,9 @@ namespace Peregrine
           uint64_t num_tasks = num_vertices * vgs_count;
           coordinator.update_step(std::floor(num_tasks * 0.10));
           coordinator.update_number_tasks(num_tasks);
-          coordinator.coordinate();
+          coordinator.coordinate(1);
 
-          coordinator.reset_curr();
+          coordinator.reset();
 
           MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -1185,6 +1185,8 @@ namespace Peregrine
 
     dg->set_rbi(new_patterns.front());
     dg->set_known_labels(new_patterns);
+    std::vector<std::thread> coordinatorPool;
+
     if (world_rank == 0)
     {
       Peregrine::VertexCoordinator coordinator(world_size-1, 100);
@@ -1198,9 +1200,11 @@ namespace Peregrine
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
         coordinator.update_number_tasks(num_tasks);
-        coordinator.coordinate();
 
-        coordinator.reset_curr();
+        printf("number of tasks %ld\n", num_tasks);
+        coordinator.coordinate(1);
+
+        coordinator.reset();
         MPI_Barrier(MPI_COMM_WORLD);
       }
       auto t2 = utils::get_timestamp();
