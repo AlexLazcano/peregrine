@@ -39,16 +39,17 @@ void motifs(int size, int world_rank, int world_size, int nthreads)
     auto results = Peregrine::match<Peregrine::Pattern, uint64_t, Peregrine::AT_THE_END, Peregrine::UNSTOPPABLE>(g, patterns, nthreads, process, world_rank, world_size);
     if (world_rank == 0)
     {
+
         for (const auto &[pattern, count] : results)
         {
-            std::cout << pattern << ": " << count << std::endl;
+            std::cout << "master - " << pattern << ": " << count << std::endl;
         }
     }
 }
 
 int main()
 {
-    size_t nthreads = 1;
+    size_t nthreads = 2;
     int world_rank, world_size;
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);

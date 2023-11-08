@@ -93,35 +93,35 @@ namespace Peregrine
   inline void match_loop(std::stop_token stoken, DataGraph *dg, const Func &process, std::vector<std::vector<uint32_t>> &cands, HandleType &a)
   {
     uint32_t vgs_count = dg->get_vgs_count();
-    uint32_t num_vertices = dg->get_vertex_count();
-    uint64_t num_tasks = num_vertices * vgs_count;
 
-    // while (true)
-    // {
-    //   std::optional<Range> firstRange = Context::rQueue.popFirstRange();
-    //   if (!firstRange.has_value())
-    //   {
-    //     break;
-    //   }
-    //   Range r = firstRange.value();
-    // }
-
-    uint64_t task = 0;
-    while ((task = Context::task_ctr.fetch_add(1, std::memory_order_relaxed) + 1) <= num_tasks)
+    while (true)
     {
-      uint32_t v = (task-1) / vgs_count + 1;
-      uint32_t vgsi = task % vgs_count;
-      Matcher<has_anti_vertices, Stoppable, decltype(process)> m(stoken, dg->rbi, dg, vgsi, cands, process);
-      m.template map_into<L, has_anti_edges>(v);
-
-      if constexpr (Stoppable == STOPPABLE)
+      std::optional<Range> firstRange = Context::rQueue.popFirstRange();
+      if (!firstRange.has_value())
       {
-        if (stoken.stop_requested()) throw StopExploration();
+        break;
       }
+      Range r = firstRange.value();
 
-      if constexpr (OnTheFly == ON_THE_FLY)
+      uint64_t task = r.first;
+      uint64_t num_tasks = r.second;
+      while (task < num_tasks)
       {
-        a->submit();
+        uint32_t v = task / vgs_count + 1;
+        uint32_t vgsi = task % vgs_count;
+        Matcher<has_anti_vertices, Stoppable, decltype(process)> m(stoken, dg->rbi, dg, vgsi, cands, process);
+        m.template map_into<L, has_anti_edges>(v);
+
+        if constexpr (Stoppable == STOPPABLE)
+        {
+          if (stoken.stop_requested()) throw StopExploration();
+        }
+
+        if constexpr (OnTheFly == ON_THE_FLY)
+        {
+          a->submit();
+        }
+        task++;
       }
     }
   }
@@ -524,32 +524,6 @@ namespace Peregrine
         DataGraph *dg(Context::data_graph);
         Peregrine::VertexCoordinator coordinator(world_size - 1, 100);
 
-        for (const auto &p : single)
-        {
-          Context::data_graph->set_rbi(p);
-
-          uint32_t vgs_count = dg->get_vgs_count();
-          uint32_t num_vertices = dg->get_vertex_count();
-          uint64_t num_tasks = num_vertices * vgs_count;
-          coordinator.update_step(std::floor(num_tasks * 0.10));
-          coordinator.update_number_tasks(num_tasks);
-          coordinator.coordinate();
-
-          coordinator.reset_curr();
-
-          MPI_Barrier(MPI_COMM_WORLD);
-        }
-
-        if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
-        {
-          delete Context::data_graph;
-        }
-
-        return result;
-      }
-
-      if (world_rank == 1)
-      {
         printf("single: \n");
         for (const auto &p : single)
         {
@@ -565,6 +539,44 @@ namespace Peregrine
         {
           std::cout << p << std::endl;
         }
+        auto t1 = utils::get_timestamp();
+        for (const auto &p : single)
+        {
+          Context::data_graph->set_rbi(p);
+
+          uint32_t vgs_count = dg->get_vgs_count();
+          uint32_t num_vertices = dg->get_vertex_count();
+          uint64_t num_tasks = num_vertices * vgs_count;
+          coordinator.update_step(std::floor(num_tasks * 0.10));
+          coordinator.update_number_tasks(num_tasks);
+          coordinator.coordinate();
+
+          coordinator.reset_curr();
+
+          MPI_Barrier(MPI_COMM_WORLD);
+        }
+        auto t2 = utils::get_timestamp();
+
+        utils::Log{} << "-------" << "\n";
+        utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+        std::vector<uint64_t> counts(patterns.size());
+        std::vector<uint64_t> zeros(patterns.size());
+
+        MPI_Reduce(zeros.data(), counts.data(), patterns.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+        int numberPatters = patterns.size();
+
+        
+        for (int i = 0; i < numberPatters; i++)
+        {
+          result.emplace_back(patterns[i], counts[i]);
+        }
+
+        if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+        {
+          delete Context::data_graph;
+        }
+
+        return result;
       }
 
       if (!single.empty()
@@ -576,6 +588,17 @@ namespace Peregrine
       }
 
       result = match_single<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, single);
+
+      std::vector<uint64_t> sendBuffer;
+
+      for (const auto &[pattern, count] : result)
+      {
+        // std::cout << world_rank << " - " << pattern << ": " << count << std::endl;
+        sendBuffer.emplace_back(count);
+      }
+
+      MPI_Reduce(sendBuffer.data(), NULL, sendBuffer.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+
       auto vector_result = match_vector<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, vector);
       auto multi_result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, multi);
 
@@ -798,7 +821,7 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    auto t1 = utils::get_timestamp();
+    // auto t1 = utils::get_timestamp();
     for (const auto &p : patterns)
     {
       // reset state
@@ -809,7 +832,7 @@ namespace Peregrine
       Peregrine::Range range;
 
       bool success = true;
-
+      // receive range
       while (true)
       {
         success = Peregrine::request_range(range);
@@ -819,8 +842,8 @@ namespace Peregrine
         }
         Context::rQueue.addRange(range);
       }
-      std::cout << "pattern: " << p << std::endl;
-      Context::rQueue.printRanges(1);
+      // std::cout << "pattern: " << p << std::endl;
+      // Context::rQueue.printRanges(1);
 
       // set new pattern
       dg->set_rbi(p);
@@ -898,7 +921,7 @@ namespace Peregrine
       }
       MPI_Barrier(MPI_COMM_WORLD);
     }
-    auto t2 = utils::get_timestamp();
+    // auto t2 = utils::get_timestamp();
 
     barrier.finish();
     for (auto &th : pool)
@@ -911,8 +934,8 @@ namespace Peregrine
       agg_thread.join();
     }
 
-    utils::Log{} << "-------" << "\n";
-    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+    // utils::Log{} << "-------" << "\n";
+    // utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
     return results;
   }
