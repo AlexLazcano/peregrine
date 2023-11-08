@@ -64,7 +64,8 @@ namespace Peregrine
     DataGraph *data_graph;
     std::atomic<uint64_t> task_ctr(0);
     std::atomic<uint64_t> gcount(0);
-    Peregrine::RangeQueue rQueue;
+    std::shared_ptr<Peregrine::RangeQueue> rQueue;
+    // Peregrine::RangeQueue rQueue;
   }
 
   struct flag_t { bool on, working; };
@@ -135,7 +136,7 @@ namespace Peregrine
     uint64_t lcount = 0;
     while (true)
     {
-      std::optional<Range> firstRange = Context::rQueue.popFirstRange();
+      std::optional<Range> firstRange = Context::rQueue->popFirstRange();
       if (!firstRange.has_value())
       {
         return lcount;
@@ -1233,6 +1234,8 @@ namespace Peregrine
       utils::Log{} << "DONE patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
       return results;
     }
+
+    Context::rQueue = std::make_shared<Peregrine::RangeQueue>(world_rank, world_size);
     
 
     for (uint32_t i = 0; i < nworkers; ++i)
@@ -1252,7 +1255,7 @@ namespace Peregrine
       // reset state
       Context::task_ctr = 0;
       Context::gcount = 0;
-      Context::rQueue.resetVector();
+      Context::rQueue->resetVector();
       Peregrine::Range range;
 
       bool success = true;
@@ -1264,7 +1267,7 @@ namespace Peregrine
         {
           break;
         }
-        Context::rQueue.addRange(range);
+        Context::rQueue->addRange(range);
       }
 
       // Context::rQueue.printRanges(world_rank);

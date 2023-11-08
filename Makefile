@@ -39,6 +39,9 @@ countMPI: apps/count.cc $(OBJ) bliss
 testMPI: apps/testMPI.cc $(OBJ) bliss
 	$(MPICC) apps/testMPI.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
+range: apps/range.cc $(OBJ) bliss
+	$(MPICC) apps/range.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+
 output: apps/output.cc $(OBJ) bliss
 	$(CC) apps/output.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
