@@ -97,7 +97,7 @@ namespace Peregrine
 
     while (true)
     {
-      std::optional<Range> firstRange = Context::rQueue.popFirstRange();
+      std::optional<Range> firstRange = Context::rQueue->popFirstRange();
       if (!firstRange.has_value())
       {
         break;
@@ -588,7 +588,7 @@ namespace Peregrine
           << "WARNING: If you are counting, Peregrine::count() is much faster!\n";
       }
 
-      result = match_single<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, single);
+      result = match_single<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, single, world_rank, world_size);
 
       std::vector<uint64_t> sendBuffer;
 
@@ -780,7 +780,7 @@ namespace Peregrine
   template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
   ResultType<Output, VF, Pattern, AggValueT>
   match_single
-  (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
+  (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns, int world_rank, int world_size)
   {
     ResultType<Output, VF, Pattern, AggValueT> results;
 
@@ -818,7 +818,7 @@ namespace Peregrine
     {
       agg_thread = std::thread(aggregator_thread<decltype(aggregator)>, std::ref(barrier), std::ref(aggregator));
     }
-
+    Context::rQueue = std::make_shared<Peregrine::RangeQueue>(world_rank, world_size);
     // make sure the threads are all running
     barrier.join();
 
@@ -829,7 +829,7 @@ namespace Peregrine
       Context::task_ctr = 0;
 
 
-      Context::rQueue.resetVector();
+      Context::rQueue->resetVector();
       Peregrine::Range range;
 
       bool success = true;
@@ -841,7 +841,7 @@ namespace Peregrine
         {
           break;
         }
-        Context::rQueue.addRange(range);
+        Context::rQueue->addRange(range);
       }
       // std::cout << "pattern: " << p << std::endl;
       // Context::rQueue.printRanges(1);
