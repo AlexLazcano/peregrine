@@ -51,7 +51,7 @@ namespace Peregrine
             // printf("number of conusumer: %d tasks %ld\n", this->number_of_consumers, this->number_tasks);
             while (true)
             {
-                auto maybeRange = this->get_v_range(id);
+                auto maybeRange = this->get_v_range();
 
                 if (!maybeRange.has_value())
                 {
@@ -102,7 +102,7 @@ namespace Peregrine
         void update_step(u_int64_t new_step) {
             this->step = new_step;
         }
-        std::optional<Range> get_v_range(int id)
+        std::optional<Range> get_v_range()
         {
             uint64_t before = this->curr.fetch_add(this->step);
             if (before >= this->number_tasks)

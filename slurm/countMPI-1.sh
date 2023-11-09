@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=1
 #SBATCH --time=00:30
 #SBATCH --mem=5G
 #SBATCH --partition=slow
 #SBATCH --ntasks=3
 
-srun /home/$USER/peregrine/bin/countMPI ../data/citeseer 7-motifs 4
+srun /home/$USER/peregrine/bin/countMPI ../data/citeseer 4-motifs 1
