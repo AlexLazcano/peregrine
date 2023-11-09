@@ -34,6 +34,7 @@ namespace Peregrine
     {
     private:
         uint64_t step;
+        int nWorkers;
         std::atomic<uint64_t> curr = 0;
         uint64_t number_tasks = 0;
         int number_of_consumers;
@@ -117,11 +118,11 @@ namespace Peregrine
         {
             this->step = 100;
         }
-        VertexCoordinator(int numConsumers, int64_t steps_init) : number_of_consumers(numConsumers), step(steps_init)
+        VertexCoordinator(int numConsumers, int64_t steps_init, int nworkers) : number_of_consumers(numConsumers), step(steps_init), nWorkers(nworkers)
         {
         }
 
-        void coordinate(int nWorkers)
+        void coordinate()
         {
             std::vector<std::thread> pool;
 

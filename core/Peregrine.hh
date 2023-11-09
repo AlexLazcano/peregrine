@@ -523,7 +523,7 @@ namespace Peregrine
       if (world_rank == 0)
       {
         DataGraph *dg(Context::data_graph);
-        Peregrine::VertexCoordinator coordinator(world_size - 1, 100);
+        Peregrine::VertexCoordinator coordinator(world_size - 1, 100, 1);
 
         printf("single: \n");
         for (const auto &p : single)
@@ -550,7 +550,7 @@ namespace Peregrine
           uint64_t num_tasks = num_vertices * vgs_count;
           coordinator.update_step(std::floor(num_tasks * 0.10));
           coordinator.update_number_tasks(num_tasks);
-          coordinator.coordinate(1);
+          coordinator.coordinate();
 
           coordinator.reset();
 
@@ -1189,7 +1189,7 @@ namespace Peregrine
 
     if (world_rank == 0)
     {
-      Peregrine::VertexCoordinator coordinator(world_size-1, 100);
+      Peregrine::VertexCoordinator coordinator(world_size-1, 100, nworkers);
       auto t1 = utils::get_timestamp();
       for (const auto &p : new_patterns)
       {
@@ -1201,8 +1201,8 @@ namespace Peregrine
         uint64_t num_tasks = num_vertices * vgs_count;
         coordinator.update_number_tasks(num_tasks);
 
-        printf("number of tasks %ld\n", num_tasks);
-        coordinator.coordinate(1);
+        
+        coordinator.coordinate();
 
         coordinator.reset();
         MPI_Barrier(MPI_COMM_WORLD);
