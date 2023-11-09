@@ -63,7 +63,7 @@ namespace Peregrine
                 MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
 
                 Range range = maybeRange.value();
-                // printf("%d range: %ld %ld \n", id, range.first, range.second);
+                printf("%d range: %ld %ld \n", id, range.first, range.second);
                 buffer[0] = range.first;
                 buffer[1] = range.second;
                 // Tag 1 - size 2
@@ -134,16 +134,17 @@ namespace Peregrine
         {
         }
 
-        void coordinate()
+        utils::timestamp_t coordinate()
         {
             std::vector<std::thread> pool;
             Barrier barrier(this->nWorkers);
 
-                        auto w = [this](int id, Barrier &b)
+            auto w = [this](int id, Barrier &b)
             {
                 this->coordinateWorker(id, b);
             };
 
+            auto t1 = utils::get_timestamp();
             for (int i = 0; i < nWorkers; i++)
             {
                 pool.emplace_back(w, i, std::ref(barrier));
@@ -155,6 +156,8 @@ namespace Peregrine
             {
                 th.join();
             }
+            auto t2 = utils::get_timestamp();
+            return (t2 - t1);
         }
     };
 

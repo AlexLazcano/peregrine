@@ -540,6 +540,7 @@ namespace Peregrine
         {
           std::cout << p << std::endl;
         }
+        utils::timestamp_t vertexDistributionTime = 0;
         auto t1 = utils::get_timestamp();
         for (const auto &p : single)
         {
@@ -550,7 +551,7 @@ namespace Peregrine
           uint64_t num_tasks = num_vertices * vgs_count;
           coordinator.update_step(std::floor(num_tasks * 0.10));
           coordinator.update_number_tasks(num_tasks);
-          coordinator.coordinate();
+          vertexDistributionTime += coordinator.coordinate();
 
           coordinator.reset();
 
@@ -560,6 +561,7 @@ namespace Peregrine
 
         utils::Log{} << "-------" << "\n";
         utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+        utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
         std::vector<uint64_t> counts(patterns.size());
         std::vector<uint64_t> zeros(patterns.size());
 
@@ -1191,6 +1193,7 @@ namespace Peregrine
     {
       Peregrine::VertexCoordinator coordinator(world_size-1, 100, nworkers);
       auto t1 = utils::get_timestamp();
+      utils::timestamp_t vertexDistributionTime = 0;
       for (const auto &p : new_patterns)
       {
 
@@ -1200,9 +1203,9 @@ namespace Peregrine
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
         coordinator.update_number_tasks(num_tasks);
-
+        coordinator.update_step(std::floor(num_tasks/(world_size-1))+1);
         
-        coordinator.coordinate();
+        vertexDistributionTime +=  coordinator.coordinate();
 
         coordinator.reset();
         MPI_Barrier(MPI_COMM_WORLD);
@@ -1236,6 +1239,7 @@ namespace Peregrine
 
       utils::Log{} << "-------" << "\n";
       utils::Log{} << "DONE patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+      utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
       return results;
     }
 
