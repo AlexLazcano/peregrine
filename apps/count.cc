@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
   size_t nthreads = argc < 4 ? 1 : std::stoi(argv[3]);
   int world_rank, world_size;
   int provided;
-  int threaded = MPI_THREAD_SERIALIZED;
+  int threaded = MPI_THREAD_MULTIPLE;
   MPI_Init_thread(NULL, NULL, threaded, &provided);
 
   if(provided < threaded) { 

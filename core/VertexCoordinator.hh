@@ -39,38 +39,51 @@ namespace Peregrine
         uint64_t number_tasks = 0;
         int number_of_consumers;
         std::atomic<int> processesFinished = 0;
+        std::atomic<int> threadsFinished = 0;
         bool finished = false;
-
-        void coordinateWorker(int id)
+        void coordinateWorker(int id, Barrier &b)
         {
             // printf("coordinating\n");
-            int processesFinished = 0;
             MPI_Status status;
             // std::vector<uint64_t> buffer(2);
             uint64_t buffer[2];
             
             // printf("number of conusumer: %d tasks %ld\n", this->number_of_consumers, this->number_tasks);
-            while (processesFinished < this->number_of_consumers)
+            while (true)
             {
+                auto maybeRange = this->get_v_range(id);
+
+                if (!maybeRange.has_value())
+                {
+                    break;
+                }
+                
+                // printf("recv %d\n", id);
                 // Tag 0 - Receive empty message and see who its from
                 MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
 
-                auto maybeRange = this->get_v_range(id);
+                Range range = maybeRange.value();
+                // printf("%d range: %ld %ld \n", id, range.first, range.second);
+                buffer[0] = range.first;
+                buffer[1] = range.second;
+                // Tag 1 - size 2
+                MPI_Send(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
+               
+            }
 
-                if (maybeRange.has_value())
+            b.hit();
+
+            if (id == 0)
+            {
+                int processesFinished = 0;
+
+                while (processesFinished < this->number_of_consumers)
                 {
-                    Range range = maybeRange.value();
-                    buffer[0] = range.first;
-                    buffer[1] = range.second;
-                    // Tag 1 - size 2
-                    MPI_Send(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
-                }
-                else
-                {
-                    // Tag 1
+                    // Tag 0 - Receive empty message and see who its from
+                    MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+                    // Tag 1 - size 1
                     MPI_Send(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
                     processesFinished++;
-                    // printf("p finished %d / %d\n", processesFinished, this->number_of_consumers);
                 }
             }
         }
@@ -107,7 +120,6 @@ namespace Peregrine
                 last = this->number_tasks+1;
             }
 
-            printf("%d range: %ld %ld \n", id, before, last);
             // range.first = before;
             // range.second = last;
             // this->curr += this->step;
@@ -125,16 +137,19 @@ namespace Peregrine
         void coordinate()
         {
             std::vector<std::thread> pool;
+            Barrier barrier(this->nWorkers);
 
-            auto w = [this](int id)
+                        auto w = [this](int id, Barrier &b)
             {
-                this->coordinateWorker(id);
+                this->coordinateWorker(id, b);
             };
 
             for (int i = 0; i < nWorkers; i++)
             {
-                pool.emplace_back(w, i);
+                pool.emplace_back(w, i, std::ref(barrier));
             }
+            barrier.join();
+            barrier.release();
 
             for (auto &th : pool)
             {
