@@ -646,7 +646,7 @@ namespace Peregrine
       // result.insert(result.end(), vector_result.begin(), vector_result.end());
       // result.insert(result.end(), multi_result.begin(), multi_result.end());
 
-      std::vector<uint64_t> sendBuffer(single.size(), 0);
+      std::vector<uint64_t> sendBuffer(0);
 
       for (const auto &[pattern, count] : result)
       {
@@ -1386,7 +1386,7 @@ namespace Peregrine
       th.join();
     }
 
-    std::vector<uint64_t> sendBuffer;
+    std::vector<uint64_t> sendBuffer(0);
     for (const auto &res : results)
     {
       sendBuffer.emplace_back(res.second);
