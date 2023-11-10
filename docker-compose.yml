@@ -4,23 +4,33 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: node-1
+    container_name: peregrine_node-1
     networks:
       - peregrine_network
     environment:
       - MPI_RANK=0
       - MPI_TOTAL_PROCESSES=4
+    depends_on:
+      - hostfile-generator
 
   node-2:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: node-2
+    container_name: peregrine_node-2
     networks:
       - peregrine_network
     environment:
       - MPI_RANK=1
       - MPI_TOTAL_PROCESSES=4
+    depends_on:
+      - hostfile-generator
+
+  hostfile-generator:
+    image: ubuntu:20.04
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: sh -c 'docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" peregrine_node-1 peregrine_node-2 > /hostfile && tail -f /dev/null'
 
 networks:
   peregrine_network:

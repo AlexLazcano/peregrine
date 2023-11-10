@@ -32,5 +32,7 @@ RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 30
 RUN update-alternatives --config g++
 # run make
 RUN make countMPI
+COPY getHosts.sh /peregrine/getHosts.sh
+RUN chmod +x /peregrine/getHosts.sh
 #This line keeps the container running 
-ENTRYPOINT ["tail", "-f", "/dev/null"]
+ENTRYPOINT ["/peregrine/getHosts.sh"]
