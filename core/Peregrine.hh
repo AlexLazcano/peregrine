@@ -541,6 +541,7 @@ namespace Peregrine
           std::cout << p << std::endl;
         }
         utils::timestamp_t vertexDistributionTime = 0;
+        // TODO: Make timestamps into time communicating and time working
         auto t1 = utils::get_timestamp();
         for (const auto &p : single)
         {
@@ -558,10 +559,21 @@ namespace Peregrine
           MPI_Barrier(MPI_COMM_WORLD);
         }
         auto t2 = utils::get_timestamp();
+        size_t numberOfSingles = single.size();
+        std::vector<uint64_t> counts(numberOfSingles);
+        std::vector<uint64_t> zeros(numberOfSingles, 0);
+        MPI_Reduce(zeros.data(), counts.data(), numberOfSingles, MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
 
+        printf("reduced singles\n");
+        for (size_t i = 0; i < numberOfSingles; i++)
+        {
+          result.emplace_back(patterns[i], counts[i]);
+        }
+
+        std::vector<SmallGraph> vectorPatterns;
+        auto t3 = utils::get_timestamp();
         for (const auto &p : vector)
         {
-          std::cout << "Vec" <<  p << std::endl;
           Context::data_graph->set_rbi(p);
 
           uint32_t vgs_count = dg->get_vgs_count();
@@ -569,29 +581,46 @@ namespace Peregrine
           uint64_t num_tasks = num_vertices * vgs_count;
           coordinator.update_step(std::floor(num_tasks * 0.10));
           coordinator.update_number_tasks(num_tasks);
+          std::vector<uint32_t> ls(p.get_labels().cbegin(), p.get_labels().cend());
+
           vertexDistributionTime += coordinator.coordinate();
 
           coordinator.reset();
+          uint32_t dummy = 0;
+          uint32_t maxLabel = 0;
+
+          MPI_Reduce(&dummy, &maxLabel, 1, MPI_UINT32_T, MPI_MAX, 0, MPI_COMM_WORLD);
+          // printf("max label %d\n", maxLabel);
+          uint32_t pl = dg->new_label;
+          for (uint32_t i = 0; i < maxLabel; i++)
+          {
+            ls[pl] = i;
+            vectorPatterns.emplace_back(SmallGraph(p, ls));
+          }
 
           MPI_Barrier(MPI_COMM_WORLD);
         }
+        auto t4 = utils::get_timestamp();
 
-        utils::Log{} << "-------"
-                     << "\n";
-        utils::Log{} << "all patterns finished after " << (t2 - t1) / 1e6 << "s"
-                     << "\n";
-        utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s"
-                     << "\n";
-        std::vector<uint64_t> counts(patterns.size());
-        std::vector<uint64_t> zeros(patterns.size());
+        // Vector Section
+        size_t numberOfVectors = vectorPatterns.size();
 
-        MPI_Reduce(zeros.data(), counts.data(), patterns.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
-        int numberPatterns = patterns.size();
-        printf("reduced\n");
-        for (int i = 0; i < numberPatterns; i++)
+        counts.resize(numberOfVectors, 0);
+        zeros.resize(numberOfVectors, 0);
+        // std::vector<uint64_t> counts(numberOfVectors);
+        // std::vector<uint64_t> zeros(numberOfVectors, 0);
+        MPI_Reduce(zeros.data(), counts.data(), numberOfVectors, MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+        printf("reduced vector\n");
+
+        for (size_t i = 0; i < numberOfVectors; i++)
         {
-          result.emplace_back(patterns[i], counts[i]);
+          result.emplace_back(vectorPatterns[i], counts[i]);
         }
+
+        utils::Log{} << "-------" << "\n";
+        utils::Log{} << "all patterns finished after " << (t2 - t1) + (t4 - t3) / 1e6 << "s"
+                     << "\n";
+        utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
 
         if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
         {
@@ -617,14 +646,23 @@ namespace Peregrine
       // result.insert(result.end(), vector_result.begin(), vector_result.end());
       // result.insert(result.end(), multi_result.begin(), multi_result.end());
 
-      std::vector<uint64_t> sendBuffer(patterns.size(), 0);
+      std::vector<uint64_t> sendBuffer(single.size(), 0);
 
-      // for (const auto &[pattern, count] : result)
-      // {
-      //   std::cout << world_rank << " - " << pattern << ": " << count << std::endl;
-      //   sendBuffer.emplace_back(count);
-      // }
-      printf("reducing\n");
+      for (const auto &[pattern, count] : result)
+      {
+        // std::cout << world_rank << " - " << pattern << ": " << count << std::endl;
+        sendBuffer.emplace_back(count);
+      }
+
+      MPI_Reduce(sendBuffer.data(), NULL, sendBuffer.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+
+      sendBuffer.clear();
+
+      for (const auto &[pattern, count] : vector_result)
+      {
+        sendBuffer.emplace_back(count);
+      }
+
       MPI_Reduce(sendBuffer.data(), NULL, sendBuffer.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
 
       return result;
@@ -1009,7 +1047,6 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    auto t1 = utils::get_timestamp();
     for (const auto &p : patterns)
     {
       // reset state
@@ -1097,10 +1134,10 @@ namespace Peregrine
       std::vector<uint32_t> ls(p.get_labels().cbegin(), p.get_labels().cend());
       uint32_t pl = dg->new_label;
       uint32_t l = 0;
-      
       for (auto &m : aggregator.latest_result)
       {
         ls[pl] = aggregator.VEC_AGG_OFFSET + l;
+        // printf("ls[%d] = %d\n",pl, ls[pl]);
         if constexpr (Output == DISK)
         {
           results.emplace_back(SmallGraph(p, ls), m.load(), OutputManager<DISK>::get_path());
@@ -1108,13 +1145,17 @@ namespace Peregrine
         else
         {
           results.emplace_back(SmallGraph(p, ls), m.load());
+          // std::cout << world_rank << SmallGraph(p, ls) << m.load() << std::endl;
         }
         l += 1;
       }
-  
+
+      
+      MPI_Reduce(&l, NULL, 1, MPI_UINT32_T, MPI_MAX, 0, MPI_COMM_WORLD);
+
       MPI_Barrier(MPI_COMM_WORLD);
     }
-    auto t2 = utils::get_timestamp();
+
 
     barrier.finish();
     for (auto &th : pool)
@@ -1127,12 +1168,12 @@ namespace Peregrine
       agg_thread.join();
     }
 
-    for (const auto &[pattern, count] : results)
-      {
-        std::cout << "v " <<  world_rank << " - " << pattern << ": " << count << std::endl;
-      }
-    utils::Log{} << "------- Match Vector" << "\n";
-    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
+    // for (const auto &[pattern, count] : results)
+    //   {
+    //     std::cout << "v " <<  world_rank << " - " << pattern << ": " << count << std::endl;
+    //   }
+    // utils::Log{} << "------- Match Vector" << "\n";
+    // utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
     return results;
   }

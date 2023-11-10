@@ -24,7 +24,6 @@ void motifs(int size, int world_rank, int world_size, int nthreads, std::vector<
     //     .set_label(1, 100);
     //     patterns.emplace_back(p2);
 
-
     if (world_rank == 0)
     {
         printf("patterns\n");
@@ -62,7 +61,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     const std::string pattern_name(argv[1]);
-    
+
     size_t nthreads = argc < 3 ? 1 : std::stoi(argv[2]);
     std::vector<Peregrine::SmallGraph> patterns;
     if (auto end = pattern_name.rfind("motifs"); end != std::string::npos)
@@ -85,15 +84,7 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-
-
     printf("Hello world from process %d, of %d. Thread num: %ld \n", world_rank, world_size, nthreads);
-
-    if (world_rank == 0)
-    {
-        std::cout << pattern_name << " - "<< nthreads << std::endl;
-    }
-    
 
     motifs(4, world_rank, world_size, nthreads, patterns);
 

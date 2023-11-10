@@ -63,7 +63,7 @@ namespace Peregrine
                 MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
 
                 Range range = maybeRange.value();
-                printf("%d range: %ld %ld \n", id, range.first, range.second);
+                // printf("%d range: %ld %ld \n", id, range.first, range.second);
                 buffer[0] = range.first;
                 buffer[1] = range.second;
                 // Tag 1 - size 2
