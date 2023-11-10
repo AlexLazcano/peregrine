@@ -1,11 +1,11 @@
 #include "Peregrine.hh"
-#include "mpio.h"
+#include "mpi.h"
 using namespace Peregrine;
-void motifs(int size, int world_rank, int world_size, int nthreads)
+void motifs(int size, int world_rank, int world_size, int nthreads, std::vector<SmallGraph> patterns)
 {
     DataGraph g("data/citeseer/");
 
-    std::vector<SmallGraph> patterns = PatternGenerator::all(size, PatternGenerator::VERTEX_BASED, PatternGenerator::INCLUDE_ANTI_EDGES);
+    // std::vector<SmallGraph> patterns = PatternGenerator::all(size, PatternGenerator::VERTEX_BASED, PatternGenerator::INCLUDE_ANTI_EDGES);
 
     // SmallGraph p1;
     // p1
@@ -47,17 +47,55 @@ void motifs(int size, int world_rank, int world_size, int nthreads)
     }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    size_t nthreads = 2;
+    // size_t nthreads = 2;
     int world_rank, world_size;
-    MPI_Init(NULL, NULL);
+    int provided;
+    int threaded = MPI_THREAD_MULTIPLE;
+    MPI_Init_thread(NULL, NULL, threaded, &provided);
+
+    if (provided < threaded)
+    {
+        std::cerr << "Current Threaded Not supported\n";
+        MPI_Finalize();
+        return 1;
+    }
+    const std::string pattern_name(argv[1]);
+    
+    size_t nthreads = argc < 3 ? 1 : std::stoi(argv[2]);
+    std::vector<Peregrine::SmallGraph> patterns;
+    if (auto end = pattern_name.rfind("motifs"); end != std::string::npos)
+    {
+        auto k = std::stoul(pattern_name.substr(0, end - 1));
+        patterns = Peregrine::PatternGenerator::all(k,
+                                                    Peregrine::PatternGenerator::VERTEX_BASED,
+                                                    Peregrine::PatternGenerator::INCLUDE_ANTI_EDGES);
+    }
+    else if (auto end = pattern_name.rfind("clique"); end != std::string::npos)
+    {
+        auto k = std::stoul(pattern_name.substr(0, end - 1));
+        patterns.emplace_back(Peregrine::PatternGenerator::clique(k));
+    }
+    else
+    {
+        patterns.emplace_back(pattern_name);
+    }
+
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
+
+
     printf("Hello world from process %d, of %d. Thread num: %ld \n", world_rank, world_size, nthreads);
 
-    motifs(4, world_rank, world_size, nthreads);
+    if (world_rank == 0)
+    {
+        std::cout << pattern_name << " - "<< nthreads << std::endl;
+    }
+    
+
+    motifs(4, world_rank, world_size, nthreads, patterns);
 
     printf("DONE Process %d\n", world_rank);
 

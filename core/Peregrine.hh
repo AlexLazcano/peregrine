@@ -523,7 +523,7 @@ namespace Peregrine
       if (world_rank == 0)
       {
         DataGraph *dg(Context::data_graph);
-        Peregrine::VertexCoordinator coordinator(world_size - 1, 100, 1);
+        Peregrine::VertexCoordinator coordinator(world_size - 1, 100, nworkers);
 
         printf("single: \n");
         for (const auto &p : single)
