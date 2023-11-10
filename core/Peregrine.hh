@@ -559,17 +559,36 @@ namespace Peregrine
         }
         auto t2 = utils::get_timestamp();
 
-        utils::Log{} << "-------" << "\n";
-        utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
-        utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
+        for (const auto &p : vector)
+        {
+          std::cout << "Vec" <<  p << std::endl;
+          Context::data_graph->set_rbi(p);
+
+          uint32_t vgs_count = dg->get_vgs_count();
+          uint32_t num_vertices = dg->get_vertex_count();
+          uint64_t num_tasks = num_vertices * vgs_count;
+          coordinator.update_step(std::floor(num_tasks * 0.10));
+          coordinator.update_number_tasks(num_tasks);
+          vertexDistributionTime += coordinator.coordinate();
+
+          coordinator.reset();
+
+          MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+        utils::Log{} << "-------"
+                     << "\n";
+        utils::Log{} << "all patterns finished after " << (t2 - t1) / 1e6 << "s"
+                     << "\n";
+        utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s"
+                     << "\n";
         std::vector<uint64_t> counts(patterns.size());
         std::vector<uint64_t> zeros(patterns.size());
 
         MPI_Reduce(zeros.data(), counts.data(), patterns.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
-        int numberPatters = patterns.size();
-
-        
-        for (int i = 0; i < numberPatters; i++)
+        int numberPatterns = patterns.size();
+        printf("reduced\n");
+        for (int i = 0; i < numberPatterns; i++)
         {
           result.emplace_back(patterns[i], counts[i]);
         }
@@ -592,26 +611,28 @@ namespace Peregrine
 
       result = match_single<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, single, world_rank, world_size);
 
-      std::vector<uint64_t> sendBuffer;
+      auto vector_result = match_vector<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, vector, world_rank, world_size);
+      // auto multi_result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, multi);
 
-      for (const auto &[pattern, count] : result)
-      {
-        // std::cout << world_rank << " - " << pattern << ": " << count << std::endl;
-        sendBuffer.emplace_back(count);
-      }
+      // result.insert(result.end(), vector_result.begin(), vector_result.end());
+      // result.insert(result.end(), multi_result.begin(), multi_result.end());
 
+      std::vector<uint64_t> sendBuffer(patterns.size(), 0);
+
+      // for (const auto &[pattern, count] : result)
+      // {
+      //   std::cout << world_rank << " - " << pattern << ": " << count << std::endl;
+      //   sendBuffer.emplace_back(count);
+      // }
+      printf("reducing\n");
       MPI_Reduce(sendBuffer.data(), NULL, sendBuffer.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
-
-      auto vector_result = match_vector<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, vector);
-      auto multi_result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, multi);
-
-      result.insert(result.end(), vector_result.begin(), vector_result.end());
-      result.insert(result.end(), multi_result.begin(), multi_result.end());
 
       return result;
     }
     else
     {
+
+      printf("Multi matching\n");
       result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, patterns);
     }
 
@@ -945,8 +966,7 @@ namespace Peregrine
 
   template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
   ResultType<Output, VF, Pattern, AggValueT>
-  match_vector
-  (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
+  match_vector(PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns, int world_rank, int world_size)
   {
     ResultType<Output, VF, Pattern, AggValueT> results;
 
@@ -984,6 +1004,7 @@ namespace Peregrine
     {
       agg_thread = std::thread(aggregator_thread<decltype(aggregator)>, std::ref(barrier), std::ref(aggregator));
     }
+    Context::rQueue = std::make_shared<Peregrine::RangeQueue>(world_rank, world_size);
 
     // make sure the threads are all running
     barrier.join();
@@ -994,6 +1015,20 @@ namespace Peregrine
       // reset state
       Context::task_ctr = 0;
 
+      Context::rQueue->resetVector();
+      Peregrine::Range range;
+
+      bool success = true;
+      // receive range
+      while (true)
+      {
+        success = Peregrine::request_range(range);
+        if (!success)
+        {
+          break;
+        }
+        Context::rQueue->addRange(range);
+      }
       // set new pattern
       dg->set_rbi(p);
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
@@ -1062,6 +1097,7 @@ namespace Peregrine
       std::vector<uint32_t> ls(p.get_labels().cbegin(), p.get_labels().cend());
       uint32_t pl = dg->new_label;
       uint32_t l = 0;
+      
       for (auto &m : aggregator.latest_result)
       {
         ls[pl] = aggregator.VEC_AGG_OFFSET + l;
@@ -1075,6 +1111,8 @@ namespace Peregrine
         }
         l += 1;
       }
+  
+      MPI_Barrier(MPI_COMM_WORLD);
     }
     auto t2 = utils::get_timestamp();
 
@@ -1089,7 +1127,11 @@ namespace Peregrine
       agg_thread.join();
     }
 
-    utils::Log{} << "-------" << "\n";
+    for (const auto &[pattern, count] : results)
+      {
+        std::cout << "v " <<  world_rank << " - " << pattern << ": " << count << std::endl;
+      }
+    utils::Log{} << "------- Match Vector" << "\n";
     utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
     return results;

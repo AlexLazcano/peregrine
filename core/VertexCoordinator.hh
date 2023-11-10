@@ -130,8 +130,11 @@ namespace Peregrine
         {
             this->step = 100;
         }
-        VertexCoordinator(int numConsumers, int64_t steps_init, int nworkers) : number_of_consumers(numConsumers), step(steps_init), nWorkers(nworkers)
+        VertexCoordinator(int numConsumers, int64_t steps_init, int nworkers)
         {
+            this->number_of_consumers = numConsumers;
+            this->step = steps_init;
+            this->nWorkers = nworkers;
         }
 
         utils::timestamp_t coordinate()
