@@ -4,7 +4,7 @@
 #include "mpi.h"
 namespace Peregrine
 {
-    static bool request_range(std::pair<uint64_t, uint64_t> &result)
+    std::optional<Range> request_range()
     {
 
         MPI_Status status;
@@ -19,14 +19,13 @@ namespace Peregrine
             // Tag 1 - Returns false since could not get any more ranges
             MPI_Recv(buffer, 1, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-            return false;
+            return std::nullopt;
         }
         else
         {
             // Tag 1 - Got more ranges
             MPI_Recv(buffer, 2, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            result = std::make_pair(buffer[0], buffer[1]);
-            return true;
+            return Range(buffer[0], buffer[1]);
         }
     }
 

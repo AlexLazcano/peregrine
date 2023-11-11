@@ -889,20 +889,17 @@ namespace Peregrine
       // reset state
       Context::task_ctr = 0;
 
-
       Context::rQueue->resetVector();
-      Peregrine::Range range;
-
-      bool success = true;
       // receive range
       while (true)
       {
-        success = Peregrine::request_range(range);
-        if (!success)
+        auto range = Peregrine::request_range();
+
+        if (!range.has_value())
         {
           break;
         }
-        Context::rQueue->addRange(range);
+        Context::rQueue->addRange(range.value());
       }
       // std::cout << "pattern: " << p << std::endl;
       // Context::rQueue.printRanges(1);
@@ -1059,12 +1056,13 @@ namespace Peregrine
       // receive range
       while (true)
       {
-        success = Peregrine::request_range(range);
-        if (!success)
+        auto range = Peregrine::request_range();
+
+        if (!range.has_value())
         {
           break;
         }
-        Context::rQueue->addRange(range);
+        Context::rQueue->addRange(range.value());
       }
       // set new pattern
       dg->set_rbi(p);
@@ -1355,18 +1353,16 @@ namespace Peregrine
       Context::task_ctr = 0;
       Context::gcount = 0;
       Context::rQueue->resetVector();
-      Peregrine::Range range;
-
-      bool success = true;
 
       while (true)
       {
-        success = Peregrine::request_range(range);
-        if (!success)
+        auto range = Peregrine::request_range();
+
+        if (!range.has_value())
         {
           break;
         }
-        Context::rQueue->addRange(range);
+        Context::rQueue->addRange(range.value());
       }
 
       // Context::rQueue.printRanges(world_rank);
