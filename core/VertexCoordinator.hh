@@ -4,31 +4,6 @@
 #include "mpi.h"
 namespace Peregrine
 {
-    std::optional<Range> request_range()
-    {
-
-        MPI_Status status;
-        int count;
-        uint64_t buffer[2];
-        // Tag 0 - Sending empty message to 0
-        MPI_Send(buffer, 1, MPI_UINT64_T, 0, 0, MPI_COMM_WORLD);
-        MPI_Probe(0, 1, MPI_COMM_WORLD, &status);
-        MPI_Get_count(&status, MPI_UINT64_T, &count);
-        if (count == 1)
-        {
-            // Tag 1 - Returns false since could not get any more ranges
-            MPI_Recv(buffer, 1, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-            return std::nullopt;
-        }
-        else
-        {
-            // Tag 1 - Got more ranges
-            MPI_Recv(buffer, 2, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            return Range(buffer[0], buffer[1]);
-        }
-    }
-
     class VertexCoordinator
     {
     private:
@@ -75,8 +50,8 @@ namespace Peregrine
             if (id == 0)
             {
                 int processesFinished = 0;
-
-                while (processesFinished < this->number_of_consumers)
+                int numberOfThreads = this->number_of_consumers*this->nWorkers;
+                while (processesFinished < numberOfThreads)
                 {
                     // Tag 0 - Receive empty message and see who its from
                     MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);

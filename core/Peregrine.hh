@@ -164,7 +164,7 @@ namespace Peregrine
   {
     (void)tid; // unused
 
-    // an extra pre-allocated cand vector for scratch space, and one for anti-vertex
+        // an extra pre-allocated cand vector for scratch space, and one for anti-vertex
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
 
     while (b.hit())
@@ -893,7 +893,7 @@ namespace Peregrine
       // receive range
       while (true)
       {
-        auto range = Peregrine::request_range();
+        auto range = Context::rQueue->request_range();
 
         if (!range.has_value())
         {
@@ -1056,7 +1056,7 @@ namespace Peregrine
       // receive range
       while (true)
       {
-        auto range = Peregrine::request_range();
+        auto range = Context::rQueue->request_range();
 
         if (!range.has_value())
         {
@@ -1285,7 +1285,7 @@ namespace Peregrine
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
         coordinator.update_number_tasks(num_tasks);
-        coordinator.update_step(std::floor(num_tasks/(world_size-1))+1);
+        coordinator.update_step(std::floor(num_tasks/((world_size-1))+1)*nworkers*2);
         
         coordinator.coordinate();
 
@@ -1356,7 +1356,7 @@ namespace Peregrine
 
       while (true)
       {
-        auto range = Peregrine::request_range();
+        auto range = Context::rQueue->request_range();
 
         if (!range.has_value())
         {

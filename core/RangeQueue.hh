@@ -29,7 +29,33 @@ namespace Peregrine
         std::optional<Range> stealRange();
         void checkRobbers();
         bool isQueueEmpty();
+        std::optional<Range> request_range();
     };
+
+    std::optional<Range> RangeQueue::request_range()
+    {
+
+        MPI_Status status;
+        int count;
+        uint64_t buffer[2];
+        // Tag 0 - Sending empty message to 0
+        MPI_Send(buffer, 1, MPI_UINT64_T, 0, 0, MPI_COMM_WORLD);
+        MPI_Probe(0, 1, MPI_COMM_WORLD, &status);
+        MPI_Get_count(&status, MPI_UINT64_T, &count);
+        if (count == 1)
+        {
+            // Tag 1 - Returns false since could not get any more ranges
+            MPI_Recv(buffer, 1, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            return std::nullopt;
+        }
+        else
+        {
+            // Tag 1 - Got more ranges
+            MPI_Recv(buffer, 2, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            return Range(buffer[0], buffer[1]);
+        }
+    }
 
     void RangeQueue::addRange(Range r) {
         std::lock_guard<std::mutex> lock(this->mtx);
