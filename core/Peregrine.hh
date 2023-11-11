@@ -1275,11 +1275,12 @@ namespace Peregrine
     if (world_rank == 0)
     {
       Peregrine::VertexCoordinator coordinator(world_size-1, 100, nworkers);
-      auto t1 = utils::get_timestamp();
-      utils::timestamp_t vertexDistributionTime = 0;
+      
+      // utils::timestamp_t vertexDistributionTime = 0;
+      utils::timestamp_t patternProcessingTime = 0;
       for (const auto &p : new_patterns)
       {
-
+        auto t1 = utils::get_timestamp();
         // set new pattern
         dg->set_rbi(p);
         uint32_t vgs_count = dg->get_vgs_count();
@@ -1288,16 +1289,22 @@ namespace Peregrine
         coordinator.update_number_tasks(num_tasks);
         coordinator.update_step(std::floor(num_tasks/(world_size-1))+1);
         
-        vertexDistributionTime +=  coordinator.coordinate();
+        coordinator.coordinate();
 
         coordinator.reset();
         MPI_Barrier(MPI_COMM_WORLD);
+        auto t2 = utils::get_timestamp();
+        patternProcessingTime += (t2 - t1);
       }
-      auto t2 = utils::get_timestamp();
+      
       std::vector<uint64_t> counts(patterns.size());
       std::vector<uint64_t> zeros(patterns.size());
-
+      utils::timestamp_t ReduceTime = 0;
+      auto t1 = utils::get_timestamp();
       MPI_Reduce(zeros.data(), counts.data(), patterns.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+      auto t2 = utils::get_timestamp();
+
+      ReduceTime = t2-t1;
 
       int numberPatters = patterns.size();
       for (int i = 0; i < numberPatters; i++)
@@ -1321,8 +1328,9 @@ namespace Peregrine
       }
 
       utils::Log{} << "-------" << "\n";
-      utils::Log{} << "DONE patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
-      utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
+      // utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
+      utils::Log{} << "Reduce Wait Time " << ReduceTime / 1e6 << "s" << "\n";
+      utils::Log{} << "DONE patterns finished after " << patternProcessingTime /1e6 << "s" << "\n";
       return results;
     }
 
