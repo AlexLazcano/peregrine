@@ -14,7 +14,7 @@ namespace Peregrine
     // TODO: Can make it better by stealing from back and having separate mtx? 
     // std::vector<std::pair<uint64_t, uint64_t>> range_vector;
     std::deque<Range> range_queue;
-    bool *finishedProcesses;
+    // bool *finishedProcesses;
     int world_rank;
     int world_size;
 
@@ -146,13 +146,13 @@ namespace Peregrine
     RangeQueue::RangeQueue(int world_rank, int world_size)
     {
         this->world_rank = world_rank;
-        this->world_size = world_rank;
-        this->finishedProcesses = new bool[world_size];
+        this->world_size = world_size;
+        // this->finishedProcesses = new bool[world_size];
     }
     
     RangeQueue::~RangeQueue()
     {
-        delete[] this->finishedProcesses;
+        // delete[] this->finishedProcesses;
     }
     
 } // namespace Peregrine
