@@ -312,6 +312,20 @@ namespace Peregrine
 
     while (b.hit())
     {
+      while (true)
+      {
+        // FIXME: Concurrent receive could be causing an issue between threads. sometimes it receives count = 2 when it should be one
+        auto maybeRange = Context::rQueue->request_range();
+
+        if (!maybeRange.has_value())
+        {
+          break;
+        }
+        Range range = maybeRange.value();
+        
+        Context::rQueue->addRange(range);
+      }
+
       ah->reset();
       const auto process = [&ah, &p](const CompleteMatch &cm) { p(*ah, cm); };
 
@@ -373,6 +387,17 @@ namespace Peregrine
 
     while (b.hit())
     {
+      // receive range
+      while (true)
+      {
+        auto range = Context::rQueue->request_range();
+
+        if (!range.has_value())
+        {
+          break;
+        }
+        Context::rQueue->addRange(range.value());
+      }
       ah->reset();
       const auto process = [&ah, &p](const CompleteMatch &cm) { p(*ah, cm); };
 
@@ -629,7 +654,7 @@ namespace Peregrine
         }
 
         utils::Log{} << "-------" << "\n";
-        utils::Log{} << "all patterns finished after " << (t2 - t1) + (t4 - t3) / 1e6 << "s"
+        utils::Log{} << "all patterns finished after " << ((t2 - t1) + (t4 - t3)) / 1e6 << "s"
                      << "\n";
         utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
 
@@ -902,16 +927,6 @@ namespace Peregrine
 
       Context::rQueue->resetVector();
       // receive range
-      while (true)
-      {
-        auto range = Context::rQueue->request_range();
-
-        if (!range.has_value())
-        {
-          break;
-        }
-        Context::rQueue->addRange(range.value());
-      }
       // std::cout << "pattern: " << p << std::endl;
       // Context::rQueue.printRanges(1);
 
@@ -1061,20 +1076,6 @@ namespace Peregrine
       Context::task_ctr = 0;
 
       Context::rQueue->resetVector();
-      Peregrine::Range range;
-
-      bool success = true;
-      // receive range
-      while (true)
-      {
-        auto range = Context::rQueue->request_range();
-
-        if (!range.has_value())
-        {
-          break;
-        }
-        Context::rQueue->addRange(range.value());
-      }
       // set new pattern
       dg->set_rbi(p);
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
