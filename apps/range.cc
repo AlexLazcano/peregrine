@@ -16,38 +16,24 @@ int main(int argc, char const *argv[])
 
     if (world_rank == 0)
     {
-       
-        for (size_t i = 0; i < 10; i++)
-        {
-            Peregrine::Range r(i, i+1);
-            rq.addRange(r);
+        for (uint i = 0; i < 10; i++)
+        {   
+            auto range = Peregrine::Range(i, i+1);
+            rq.addRange(range);
         }
         rq.printRanges();
+        MPI_Status status;
+        MPI_Request req;
+        std::vector<uint64_t> buffer(2, 0);
 
-        while (!rq.isQueueEmpty())
-        {
-            rq.checkRobbers();
+        
 
-            rq.popFirstRange();
-        }
+        
 
-        rq.checkRobbers();
     } else {
 
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        while (true)
-        {
-            auto res = rq.stealRange();
-
-            if (!res.has_value())
-            {
-                break;
-            }
-
-            Peregrine::Range range = res.value();
-            printf("stole %ld %ld\n", range.first, range.second);
-        }
     }
     
 

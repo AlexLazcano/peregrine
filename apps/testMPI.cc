@@ -41,19 +41,21 @@ int main(int argc, char *argv[])
         int count = 0;
         std::vector<std::pair<uint64_t, uint64_t>> ranges_vector;
         std::chrono::milliseconds duration(100);
+        Peregrine::RangeQueue rQueue(world_rank, world_size);
         while (true)
         {
 
-            successful = Peregrine::request_range(result);
+            auto maybeRange = rQueue.request_range();
 
             count++;
-            if (!successful)
+            if (!maybeRange.has_value())
             {
                 // printf("unsuccessful done processing %d\n", world_rank);
                 break;
             }
             else
             {
+                Peregrine::Range result = maybeRange.value();
                 // printf("%ld %ld \n", result.first, result.second);
                 ranges_vector.emplace_back(result);
             }
