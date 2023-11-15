@@ -169,6 +169,17 @@ namespace Peregrine
 
     while (b.hit())
     {
+      while (true)
+      {
+        auto range = Context::rQueue->request_range();
+
+        if (!range.has_value())
+        {
+          break;
+        }
+        Context::rQueue->addRange(range.value());
+      }
+
       Graph::Labelling L = dg->rbi.labelling_type();
       bool has_anti_edges = dg->rbi.has_anti_edges();
       bool has_anti_vertices = !dg->rbi.anti_vertices.empty();
@@ -1354,18 +1365,6 @@ namespace Peregrine
       Context::gcount = 0;
       Context::rQueue->resetVector();
 
-      while (true)
-      {
-        auto range = Context::rQueue->request_range();
-
-        if (!range.has_value())
-        {
-          break;
-        }
-        Context::rQueue->addRange(range.value());
-      }
-
-      // Context::rQueue.printRanges(world_rank);
 
       // set new pattern
       dg->set_rbi(p);
