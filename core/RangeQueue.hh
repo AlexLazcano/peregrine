@@ -27,7 +27,9 @@ namespace Peregrine
         void resetVector();
         void printRanges();
         std::optional<Range> stealRange();
-        void checkRobbers();
+        void initRobbers(MPI_Request &req, uint64_t *buffer);
+        int checkRobbers(MPI_Status &status, MPI_Request &req);
+        bool handleRobbers(MPI_Status &status, MPI_Request &req, uint64_t *buffer);
         bool isQueueEmpty();
         std::optional<Range> request_range();
     };
@@ -105,65 +107,78 @@ namespace Peregrine
 
     std::optional<Range> Peregrine::RangeQueue::stealRange()
     {
-    
         uint64_t buffer[2];
         MPI_Status status;
         int count;
-        for (int i = 0; i < world_size; i++)
+        for (int i = 0; i < this->world_size; i++)
         {
             if (i == world_rank)
             {
                 continue;
             }
-
+            printf("sent message %d / %d\n", i, this->world_size);
             MPI_Send(&buffer, 1, MPI_UINT64_T, i, 5, MPI_COMM_WORLD);
-            MPI_Probe(i, 6, MPI_COMM_WORLD, &status);
-            MPI_Get_count(&status, MPI_UINT64_T, &count);
-            if (count == 1)
-            {
-                // Tag 6 - Returns false since could not get any more ranges
-                MPI_Recv(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-                return std::nullopt;
-            }
-            else
-            {
-                // Tag 6 - Got more ranges
-                MPI_Recv(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                auto result = std::make_pair(buffer[0], buffer[1]);
-                return result;
-            }
-
-            printf("trying to steal from process %d\n", i);
         }
+        return std::nullopt;
 
-        return std::optional<Range>();
+        // for (int i = 0; i < this->world_size; i++)
+        // {
+        //     // if (i == world_rank)
+        //     // {
+        //     //     continue;
+        //     // }
+
+        //     printf("sent message %d / %d\n", i, this->world_size);
+        //     // MPI_Send(&buffer, 1, MPI_UINT64_T, i, 5, MPI_COMM_WORLD);
+        //     // MPI_Probe(i, 6, MPI_COMM_WORLD, &status);
+        //     // MPI_Get_count(&status, MPI_UINT64_T, &count);
+        //     // if (count == 1)
+        //     // {
+        //     //     // Tag 6 - Returns false since could not get any more ranges
+        //     //     MPI_Recv(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        //     //     return std::nullopt;
+        //     // }
+        //     // else
+        //     // {
+        //     //     // Tag 6 - Got more ranges
+        //     //     MPI_Recv(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //     //     auto result = std::make_pair(buffer[0], buffer[1]);
+        //     //     return result;
+        //     // }
+
+        //     // printf("trying to steal from process %d\n", i);
+        // }
     }
 
-    void RangeQueue::checkRobbers()
+    void RangeQueue::initRobbers(MPI_Request &req, uint64_t *buffer)
     {
-        MPI_Status status;
-        int64_t buffer[2] = {0};
-
-        MPI_Recv(buffer, 1, MPI_UINT64_T, MPI_ANY_SOURCE, 5, MPI_COMM_WORLD, &status);
-
-        auto maybeRange = popLastRange();
-
-        if (maybeRange.has_value())
-        {
-
-            Range range = maybeRange.value();
-            buffer[0] = range.first;
-            buffer[1] = range.second;
-
-            MPI_Send(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD);
-        }
-        else
-        { 
-            MPI_Send(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD);
-        }
+        int count = 1;
+        MPI_Irecv(buffer, count, MPI_UINT64_T, MPI_ANY_SOURCE, 5, MPI_COMM_WORLD, &req);
     }
 
+    int RangeQueue::checkRobbers(MPI_Status &status, MPI_Request &req)
+    {
+        int flag = 0;
+        MPI_Test(&req, &flag, &status);
+
+        return flag;
+    }
+
+    bool RangeQueue::handleRobbers(MPI_Status &status, MPI_Request &req, uint64_t *buffer)
+    {
+
+        auto maybeRange = this->popFirstRange();
+
+        if (!maybeRange.has_value())
+        {
+            return false;
+        }
+
+        auto range = maybeRange.value();
+        printf("%ld %ld\n", range.first, range.second);
+        return true;
+    }
     inline bool RangeQueue::isQueueEmpty()
     {
         return this->range_queue.empty();

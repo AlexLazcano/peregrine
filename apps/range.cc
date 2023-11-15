@@ -24,16 +24,32 @@ int main(int argc, char const *argv[])
         rq.printRanges();
         MPI_Status status;
         MPI_Request req;
-        std::vector<uint64_t> buffer(2, 0);
+        uint64_t buffer[2];
+        rq.initRobbers(req, buffer);
+        
 
+        while (true)
+        {
+            printf("working\n");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            printf("checking\n");
+            int flag = rq.checkRobbers(status, req);
+            if (flag)
+            {
+                printf("done\n");
+                break;
+            }
+            
+            
+        }
         
 
         
-
     } else {
 
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
+        rq.stealRange();
     }
     
 
