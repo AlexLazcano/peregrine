@@ -132,40 +132,10 @@ namespace Peregrine
             {
                 // Tag 6 - Got more ranges
                 MPI_Recv(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                auto result = std::make_pair(buffer[0], buffer[1]);
-                return result;
+                return Range(buffer[0], buffer[1]);
             }
         }
         return std::nullopt;
-
-        // for (int i = 0; i < this->world_size; i++)
-        // {
-        //     // if (i == world_rank)
-        //     // {
-        //     //     continue;
-        //     // }
-
-        //     printf("sent message %d / %d\n", i, this->world_size);
-        //     // MPI_Send(&buffer, 1, MPI_UINT64_T, i, 5, MPI_COMM_WORLD);
-        //     // MPI_Probe(i, 6, MPI_COMM_WORLD, &status);
-        //     // MPI_Get_count(&status, MPI_UINT64_T, &count);
-        //     // if (count == 1)
-        //     // {
-        //     //     // Tag 6 - Returns false since could not get any more ranges
-        //     //     MPI_Recv(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-        //     //     return std::nullopt;
-        //     // }
-        //     // else
-        //     // {
-        //     //     // Tag 6 - Got more ranges
-        //     //     MPI_Recv(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, 6, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        //     //     auto result = std::make_pair(buffer[0], buffer[1]);
-        //     //     return result;
-        //     // }
-
-        //     // printf("trying to steal from process %d\n", i);
-        // }
     }
 
     void RangeQueue::initRobbers(MPI_Request &req, uint64_t *buffer)
