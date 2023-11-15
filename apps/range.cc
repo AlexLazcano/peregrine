@@ -17,16 +17,17 @@ int main(int argc, char const *argv[])
     if (world_rank == 0)
     {
         for (uint i = 0; i < 10; i++)
-        {   
-            auto range = Peregrine::Range(i, i+1);
+        {
+            auto range = Peregrine::Range(i, i + 1);
             rq.addRange(range);
         }
         rq.printRanges();
+
+        start:
         MPI_Status status;
         MPI_Request req;
         uint64_t buffer[2];
         rq.initRobbers(req, buffer);
-        
 
         while (true)
         {
@@ -39,24 +40,37 @@ int main(int argc, char const *argv[])
                 printf("done\n");
                 break;
             }
+        }
+
+        bool success = rq.handleRobbers(status, req, buffer);
+
+        if (success)
+        {
+            goto start;
+        }
+        
+       
+    }
+    else
+    {
+        while (true)
+        {
+            // std::this_thread::sleep_for(std::chrono::seconds(2));
+
+            auto maybeRange = rq.stealRange();
+
+            if (maybeRange.has_value())
+            {
+                auto range = maybeRange.value();
+                printf("%ld %ld\n",range.first, range.second);
+            }else {
+                printf("no range\n");
+                break;
+            }
             
             
         }
-        
-
-        
-    } else {
-
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-
-        rq.stealRange();
     }
-    
-
-
-
-
-
 
     printf("DONE Process %d\n", world_rank);
 
