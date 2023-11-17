@@ -23,6 +23,21 @@ int main(int argc, char const *argv[])
 
     rq.printRanges();
 
+    while (true)
+    {
+        auto maybeRange = rq.popFirstRange();
+
+        if (!maybeRange.has_value())
+        {
+            break;
+        }
+        auto range = maybeRange.value();
+        
+    }
+    
+
+
+
     printf("DONE Process %d\n", world_rank);
 
     MPI_Finalize();

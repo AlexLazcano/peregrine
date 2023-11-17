@@ -30,8 +30,9 @@ namespace Peregrine
         int world_rank;
         int world_size;
         std::vector<int> activeProcesses;
-        std::vector<int> buffers;
-        std::vector<MPI_Request> bcast_requests;
+        std::vector<int> signals;
+        std::vector<MPI_Request> send_reqs;
+        std::vector<MPI_Request> recv_reqs;
 
     public:
         RangeQueue(int world_rank, int world_size);
@@ -47,11 +48,12 @@ namespace Peregrine
         bool handleRobbers(MPI_Status &status, MPI_Request &req, uint64_t *buffer);
         bool isQueueEmpty();
         std::optional<Range> request_range();
-        void broadcastReceive();
-        void broadcastFinished();
-        bool handleBcasts();
+        void openSignal();
+        void signalDone();
+        bool handleSignal();
         void printActive();
-        bool waitAllBcasts();
+        void printRecv();
+        bool waitAllSends();
     };
 
     std::optional<Range> RangeQueue::request_range()
@@ -79,72 +81,101 @@ namespace Peregrine
         }
     }
 
-    void RangeQueue::broadcastReceive()
+    void RangeQueue::openSignal()
     {
-        for (const auto &rank : activeProcesses)
+        // Start non-blocking receives from all other processes
+        int i = 0;
+        for (int src = 0; src < world_size; src++)
         {
-            // if (rank == this->world_rank)
-            // {
-            //     continue;
-            // }
-
-            buffers[rank] = rank;
-
-            // printf("%d rank: %d\n", world_rank, rank);
-            MPI_Ibcast(&buffers[rank], 1, MPI_INT, rank, MPI_COMM_WORLD, &bcast_requests[rank]);
-            // printf("RANK %d: waiting for %d - req %d\n", world_rank, rank, req);
+            if (src != world_rank)
+            {
+                // printf("RANK %d recv %d in i: %i\n", world_rank, src, i);
+                MPI_Irecv(&signals[i], 1, MPI_INT, src, 10, MPI_COMM_WORLD, &recv_reqs[i]);
+                i++;
+            }
         }
     }
 
-    void RangeQueue::broadcastFinished()
+    void RangeQueue::signalDone()
     {
-        int rank = this->world_rank;
-
-        printf("Rank %d broadcasted\n", world_rank);
-        MPI_Ibcast(&buffers[rank], 1, MPI_INT, rank, MPI_COMM_WORLD, &bcast_requests[rank]);
+        // Start non-blocking sends to all other processes
+        int i = 0;
+        for (int dest = 0; dest < world_size; dest++)
+        {
+            if (dest != world_rank)
+            {
+                int signal = this->world_rank;
+                MPI_Isend(&signal, 1, MPI_INT, dest, 10, MPI_COMM_WORLD, &send_reqs[i]);
+                // printf("RANK %d send %d in i: %d - %d \n", world_rank, dest, i, send_reqs[i]);
+                i++;
+            }
+        }
+        findAndRemoveElement(this->activeProcesses, this->world_rank);
     }
 
-    bool RangeQueue::waitAllBcasts()
+    bool RangeQueue::waitAllSends()
     {
-        int count = bcast_requests.size();
-        MPI_Request *array = bcast_requests.data();
-        std::vector<MPI_Status> statuses(count);
-        MPI_Waitall(count, array, statuses.data());
-        printf("all done\n");
+        int count = send_reqs.size();
+
+        MPI_Waitall(count, send_reqs.data(), MPI_STATUS_IGNORE);
         return true;
     }
 
-    bool RangeQueue::handleBcasts()
+    bool RangeQueue::handleSignal()
     {
-
-        int count = bcast_requests.size();
+        int count = recv_reqs.size();
 
         std::vector<MPI_Status> statuses(count);
 
         std::vector<int> indices(count);
-        int successCount = 0;
 
-        MPI_Request *array = bcast_requests.data();
+        MPI_Request *array = recv_reqs.data();
 
-        MPI_Testsome(count, array, &successCount, indices.data(), statuses.data());
-
-        if (successCount > 0)
+        int i = 0;
+        for (int src = 0; src < world_size; src++)
         {
-
-            for (int i = 0; i < successCount; i++)
+            if (src != world_rank)
             {
-                int completed = indices[i];
-                int rank_done = buffers[completed];
-                printf("RANK %d received %d\n", world_rank, rank_done);
-                findAndRemoveElement(activeProcesses, rank_done);
-            }
-            this->printActive();
+                int flag = 0;
+                // printf("RANK %d recv %d in i: %i\n", world_rank, src, i);
+                MPI_Test(&recv_reqs[i], &flag, MPI_STATUS_IGNORE);
 
-            return false;
+                if (flag)
+                {
+                    // printf("RANK %d completed: %d\n", world_rank, signals[i]);
+                    findAndRemoveElement(activeProcesses, signals[i]);
+                }
+                i++;
+            }
         }
 
-        this->printActive();
-        // if (this->activeProcesses.size() == 1)
+        // MPI_Testsome(count, array, &successCount, indices.data(), statuses.data());
+
+        // if (successCount > 0)
+        // {
+
+        //     for (int i = 0; i < successCount; i++)
+        //     {
+        //         int completed = indices[i];
+        //         if (completed == world_rank)
+        //         {
+        //             continue;
+        //         }
+        //         int rank_done = signals[completed];
+
+        //         printf("RANK %d completed: %d\n", world_rank, rank_done);
+        //         findAndRemoveElement(activeProcesses, rank_done);
+        //     }
+        // }
+        int flag = 0;
+        MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
+        if (flag)
+        {
+            printf("RANK %d ALL DONE\n", world_rank);
+            return true;
+        }
+
+        // if (activeProcesses.size() == 0)
         // {
         //     return true;
         // }
@@ -154,10 +185,18 @@ namespace Peregrine
 
     inline void RangeQueue::printActive()
     {
-        printf("Active size: %ld\n", activeProcesses.size());
+        printf("RANK: %d Active size: %ld\n",world_rank, activeProcesses.size());
         for (const auto &a : activeProcesses)
         {
-            printf("Rank %d: Active process %d\n", world_rank, a);
+            printf("Rank %d: Active process %d \n", world_rank, a);
+        }
+    }
+    inline void RangeQueue::printRecv()
+    {
+        printf("Active size: %ld\n", recv_reqs.size());
+        for (const auto &r : recv_reqs)
+        {
+            printf("Rank %d: Active process %d \n", world_rank, r);
         }
     }
 
@@ -292,8 +331,9 @@ namespace Peregrine
 
             this->activeProcesses.emplace_back(i);
         }
-        this->bcast_requests.resize(world_size, MPI_REQUEST_NULL);
-        this->buffers.resize(world_size);
+        this->send_reqs.resize(world_size - 1, MPI_REQUEST_NULL);
+        this->recv_reqs.resize(world_size - 1, MPI_REQUEST_NULL);
+        this->signals.resize(world_size);
     }
 
     RangeQueue::~RangeQueue()

@@ -15,35 +15,34 @@ int main(int argc, char const *argv[])
     Peregrine::RangeQueue rq(world_rank, world_size);
 
     MPI_Barrier(MPI_COMM_WORLD);
-    // std::this_thread::sleep_for(std::chrono::seconds(world_rank));
+    if (world_rank == world_size - 1)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+
     printf("RANK %d finished \n", world_rank);
-    // rq.broadcastFinished();
+    rq.openSignal();
+    rq.signalDone();
+    printf("signaled%d\n", world_rank);
 
+    while (true)
+    {
+
+        bool success = false;
+
+        success = rq.handleSignal();
+        if (success)
+        {
+            break;
+        }
+        rq.printActive();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    printf("RANK %d waiting\n", world_rank);
     MPI_Barrier(MPI_COMM_WORLD);
-    rq.broadcastReceive();
-    bool success = false;
-    MPI_Barrier(MPI_COMM_WORLD);
-    // success = rq.handleBcasts();
-    rq.waitAllBcasts();
-
-    // while (true)
-    // {
-
-    //     bool success = false;
-
-
-    //     success = rq.handleBcasts();
-
-        
-
-    //     if (success == true)
-    //     {
-    //         break;
-    //     }
-    //     rq.broadcastFinished();
-    //     std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    // }
+    rq.printActive();
+    rq.waitAllSends();
 
     printf("DONE Process %d\n", world_rank);
     MPI_Finalize();
