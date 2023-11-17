@@ -82,20 +82,15 @@ namespace Peregrine
     {
         std::vector<int> buffers_local(activeProcesses.size());
 
-        Request_Vector requests_local;
         for (const auto &rank : activeProcesses)
         {
-            MPI_Request req;
             buffers_local[rank] = rank;
             // printf("%d rank: %d\n", world_rank, rank);
-            MPI_Ibcast(&buffers_local[rank], 1, MPI_INT, rank, MPI_COMM_WORLD, &req);
+            MPI_Ibcast(&buffers_local[rank], 1, MPI_INT, rank, MPI_COMM_WORLD, &bcast_requests[rank]);
             // printf("RANK %d: waiting for %d - req %d\n", world_rank, rank, req);
-
-            requests_local.emplace_back(std::move(req));
         }
 
         buffers = std::move(buffers_local);
-        bcast_requests = std::move(requests_local);
     }
 
 
@@ -279,6 +274,7 @@ namespace Peregrine
 
             this->activeProcesses.emplace_back(i);
         }
+        this->bcast_requests.resize(world_size);
     }
 
     RangeQueue::~RangeQueue()
