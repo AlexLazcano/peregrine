@@ -4,7 +4,7 @@
 #include <mutex>
 
 // Function to find and remove an element from the vector
-void findAndRemoveElement(std::vector<int> processes, int rankToRemove)
+void findAndRemoveElement(std::vector<int> &processes, int rankToRemove)
 {
     auto it = std::find_if(processes.begin(), processes.end(), [rankToRemove](const auto &rank)
                            { return rank == rankToRemove; });
@@ -12,12 +12,7 @@ void findAndRemoveElement(std::vector<int> processes, int rankToRemove)
     if (it != processes.end())
     {
         processes.erase(it);
-        // Element found and removed
-        printf("removed %d \n", rankToRemove);
-    }
-    else
-    {
-        // Element not found
+        
     }
 }
 namespace Peregrine
@@ -55,6 +50,7 @@ namespace Peregrine
         std::optional<Range> request_range();
         void broadcastFinished();
         bool handleBcasts();
+        void printActive();
     };
 
     std::optional<Range> RangeQueue::request_range()
@@ -107,10 +103,6 @@ namespace Peregrine
     {
 
         int count = bcast_requests.size();
-        // for (int i = 0; i < count; i++)
-        // {
-        //     printf("RANK: %d - %d: %d \n",world_rank, i, handles[i] );
-        // }
 
         std::vector<MPI_Status> statuses(count);
 
@@ -127,16 +119,16 @@ namespace Peregrine
             for (int i = 0; i < successCount; i++)
             {
                 int completed = indices[i];
+                int rank_done = buffers[completed];
 
-                printf("RANK %d completed: %d\n", world_rank, buffers[completed]);
+                printf("RANK %d completed: %d\n", world_rank, rank_done);
+                findAndRemoveElement(activeProcesses, rank_done);
+
             }
             int allFinished = 0;
             MPI_Testall(count, array, &allFinished, statuses.data());
             if (allFinished)
             {
-                // for (auto& b : buffers) {
-                //     printf("Done RANK: %d - %d\n", world_rank, b);
-                // }
 
                 return true;
             }
@@ -144,6 +136,15 @@ namespace Peregrine
         }
 
         return false;
+    }
+
+    inline void RangeQueue::printActive()
+    {
+        for (const auto& a : activeProcesses)
+        {
+            printf("Rank %d: Active %d\n",world_rank, a);
+        }
+        
     }
 
     void RangeQueue::addRange(Range r)

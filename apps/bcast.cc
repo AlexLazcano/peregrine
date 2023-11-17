@@ -14,10 +14,14 @@ int main(int argc, char const *argv[])
     printf("Hello world from process %d, of %d\n", world_rank, world_size);
     Peregrine::RangeQueue rq(world_rank, world_size);
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    std::this_thread::sleep_for(std::chrono::seconds(world_rank));
+    printf("RANK %d finished \n", world_rank);
     rq.broadcastFinished();
 
     while (true)
     {
+
         bool success = false;
 
         success = rq.handleBcasts();
@@ -27,6 +31,7 @@ int main(int argc, char const *argv[])
             break;
         }
     }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     printf("DONE Process %d\n", world_rank);
     MPI_Finalize();
