@@ -23,6 +23,7 @@ void findAndRemoveElement(std::vector<int> processes, int rankToRemove)
 namespace Peregrine
 {
     using Range = std::pair<uint64_t, uint64_t>;
+    using Request_Vector = std::vector<MPI_Request>;
 
     class RangeQueue
     {
@@ -36,6 +37,7 @@ namespace Peregrine
         int world_size;
         std::vector<int> activeProcesses;
         std::vector<int> buffers;
+        std::vector<MPI_Request> bcast_requests;
 
     public:
         RangeQueue(int world_rank, int world_size);
@@ -51,9 +53,8 @@ namespace Peregrine
         bool handleRobbers(MPI_Status &status, MPI_Request &req, uint64_t *buffer);
         bool isQueueEmpty();
         std::optional<Range> request_range();
-        std::vector<MPI_Request> broadcastFinished();
-        std::vector<std::pair<MPI_Request, int>> receiveBcasts();
-        bool handleBcasts(std::vector<MPI_Request> handles);
+        void broadcastFinished();
+        bool handleBcasts();
     };
 
     std::optional<Range> RangeQueue::request_range()
@@ -81,10 +82,11 @@ namespace Peregrine
         }
     }
 
-    std::vector<MPI_Request> RangeQueue::broadcastFinished()
+    void RangeQueue::broadcastFinished()
     {
         std::vector<int> buffers_local(activeProcesses.size());
-        std::vector<MPI_Request> requests;
+
+        Request_Vector requests_local;
         for (const auto &rank : activeProcesses)
         {
             MPI_Request req;
@@ -93,24 +95,18 @@ namespace Peregrine
             MPI_Ibcast(&buffers_local[rank], 1, MPI_INT, rank, MPI_COMM_WORLD, &req);
             // printf("RANK %d: waiting for %d - req %d\n", world_rank, rank, req);
 
-            requests.emplace_back(std::move(req));
+            requests_local.emplace_back(std::move(req));
         }
 
         buffers = std::move(buffers_local);
-        return requests;
+        bcast_requests = std::move(requests_local);
     }
 
-    std::vector<std::pair<MPI_Request, int>> RangeQueue::receiveBcasts()
-    {
-        std::vector<std::pair<MPI_Request, int>> handles;
 
-        return handles;
-    }
-
-    bool RangeQueue::handleBcasts(std::vector<MPI_Request> handles)
+    bool RangeQueue::handleBcasts()
     {
 
-        int count = handles.size();
+        int count = bcast_requests.size();
         // for (int i = 0; i < count; i++)
         // {
         //     printf("RANK: %d - %d: %d \n",world_rank, i, handles[i] );
@@ -121,8 +117,7 @@ namespace Peregrine
         std::vector<int> indices(count);
         int successCount = 0;
 
-        MPI_Request *array = handles.data();
-
+        MPI_Request *array = bcast_requests.data();
 
         MPI_Testsome(count, array, &successCount, indices.data(), statuses.data());
 

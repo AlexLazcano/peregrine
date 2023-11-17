@@ -14,13 +14,13 @@ int main(int argc, char const *argv[])
     printf("Hello world from process %d, of %d\n", world_rank, world_size);
     Peregrine::RangeQueue rq(world_rank, world_size);
 
-    auto requests = rq.broadcastFinished();
+    rq.broadcastFinished();
 
     while (true)
     {
         bool success = false;
 
-        success = rq.handleBcasts(std::move(requests));
+        success = rq.handleBcasts();
 
         if (success == true)
         {
