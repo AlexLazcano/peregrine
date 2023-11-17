@@ -3,6 +3,23 @@
 
 #include <mutex>
 
+// Function to find and remove an element from the vector
+void findAndRemoveElement(std::vector<int> processes, int rankToRemove)
+{
+    auto it = std::find_if(processes.begin(), processes.end(), [rankToRemove](const auto &rank)
+                           { return rank == rankToRemove; });
+
+    if (it != processes.end())
+    {
+        processes.erase(it);
+        // Element found and removed
+        printf("removed %d \n", rankToRemove);
+    }
+    else
+    {
+        // Element not found
+    }
+}
 namespace Peregrine
 {
     using Range = std::pair<uint64_t, uint64_t>;
@@ -17,6 +34,8 @@ namespace Peregrine
         // bool *finishedProcesses;
         int world_rank;
         int world_size;
+        std::vector<int> activeProcesses;
+        std::vector<int> buffers;
 
     public:
         RangeQueue(int world_rank, int world_size);
@@ -32,6 +51,9 @@ namespace Peregrine
         bool handleRobbers(MPI_Status &status, MPI_Request &req, uint64_t *buffer);
         bool isQueueEmpty();
         std::optional<Range> request_range();
+        std::vector<MPI_Request> broadcastFinished();
+        std::vector<std::pair<MPI_Request, int>> receiveBcasts();
+        bool handleBcasts(std::vector<MPI_Request> handles);
     };
 
     std::optional<Range> RangeQueue::request_range()
@@ -57,6 +79,76 @@ namespace Peregrine
             MPI_Recv(buffer, 2, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             return Range(buffer[0], buffer[1]);
         }
+    }
+
+    std::vector<MPI_Request> RangeQueue::broadcastFinished()
+    {
+        std::vector<int> buffers_local(activeProcesses.size());
+        std::vector<MPI_Request> requests;
+        for (const auto &rank : activeProcesses)
+        {
+            MPI_Request req;
+            buffers_local[rank] = rank;
+            // printf("%d rank: %d\n", world_rank, rank);
+            MPI_Ibcast(&buffers_local[rank], 1, MPI_INT, rank, MPI_COMM_WORLD, &req);
+            // printf("RANK %d: waiting for %d - req %d\n", world_rank, rank, req);
+
+            requests.emplace_back(std::move(req));
+        }
+
+        buffers = std::move(buffers_local);
+        return requests;
+    }
+
+    std::vector<std::pair<MPI_Request, int>> RangeQueue::receiveBcasts()
+    {
+        std::vector<std::pair<MPI_Request, int>> handles;
+
+        return handles;
+    }
+
+    bool RangeQueue::handleBcasts(std::vector<MPI_Request> handles)
+    {
+
+        int count = handles.size();
+        // for (int i = 0; i < count; i++)
+        // {
+        //     printf("RANK: %d - %d: %d \n",world_rank, i, handles[i] );
+        // }
+
+        std::vector<MPI_Status> statuses(count);
+
+        std::vector<int> indices(count);
+        int successCount = 0;
+
+        MPI_Request *array = handles.data();
+
+
+        MPI_Testsome(count, array, &successCount, indices.data(), statuses.data());
+
+        if (successCount > 0)
+        {
+
+            for (int i = 0; i < successCount; i++)
+            {
+                int completed = indices[i];
+
+                printf("RANK %d completed: %d\n", world_rank, buffers[completed]);
+            }
+            int allFinished = 0;
+            MPI_Testall(count, array, &allFinished, statuses.data());
+            if (allFinished)
+            {
+                // for (auto& b : buffers) {
+                //     printf("Done RANK: %d - %d\n", world_rank, b);
+                // }
+
+                return true;
+            }
+            return false;
+        }
+
+        return false;
     }
 
     void RangeQueue::addRange(Range r)
@@ -182,7 +274,15 @@ namespace Peregrine
     {
         this->world_rank = world_rank;
         this->world_size = world_size;
-        // this->finishedProcesses = new bool[world_size];
+        for (int i = 0; i < this->world_size; i++)
+        {
+            // if (i == world_rank)
+            // {
+            //     continue;
+            // }
+
+            this->activeProcesses.emplace_back(i);
+        }
     }
 
     RangeQueue::~RangeQueue()
