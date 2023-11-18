@@ -22,53 +22,44 @@ int main(int argc, char const *argv[])
             rq.addRange(range);
         }
         rq.printRanges();
+        rq.openSignal();
+        
+    bool active = true;
+    start:
+        rq.initRobbers();
 
-        start:
-        MPI_Status status;
-        MPI_Request req;
-        uint64_t buffer[2];
-        rq.initRobbers(req, buffer);
-
-        while (true)
+        while (rq.handleSignal())
         {
+            if (rq.isQueueEmpty() && active)
+            {
+                rq.signalDone();
+                active = false;
+            }
+            
             printf("working\n");
             std::this_thread::sleep_for(std::chrono::seconds(1));
             printf("checking\n");
-            int flag = rq.checkRobbers(status, req);
+            int flag = rq.checkRobbers();
             if (flag)
             {
-                printf("done\n");
-                break;
+                printf("Robber detected\n");
+                bool success = rq.handleRobbers();
+                if (success)
+                {
+                    goto start;
+                }
             }
         }
-
-        bool success = rq.handleRobbers(status, req, buffer);
-
-        if (success)
-        {
-            goto start;
-        }
-        
-       
     }
     else
     {
-        while (true)
+        rq.signalDone();
+        rq.handleSignal();
+        bool running = true;
+        while (running)
         {
-            // std::this_thread::sleep_for(std::chrono::seconds(2));
-
-            auto maybeRange = rq.stealRange();
-
-            if (maybeRange.has_value())
-            {
-                auto range = maybeRange.value();
-                printf("%ld %ld\n",range.first, range.second);
-            }else {
-                printf("no range\n");
-                break;
-            }
-            
-            
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            running = rq.stealRange();
         }
     }
 
