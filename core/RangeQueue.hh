@@ -156,36 +156,13 @@ namespace Peregrine
             }
         }
 
-        // MPI_Testsome(count, array, &successCount, indices.data(), statuses.data());
-
-        // if (successCount > 0)
-        // {
-
-        //     for (int i = 0; i < successCount; i++)
-        //     {
-        //         int completed = indices[i];
-        //         if (completed == world_rank)
-        //         {
-        //             continue;
-        //         }
-        //         int rank_done = signals[completed];
-
-        //         printf("RANK %d completed: %d\n", world_rank, rank_done);
-        //         findAndRemoveElement(activeProcesses, rank_done);
-        //     }
-        // }
         int flag = 0;
         MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
         if (flag)
         {
-            printf("RANK %d ALL DONE\n", world_rank);
+            // printf("RANK %d ALL DONE\n", world_rank);
             return true;
         }
-
-        // if (activeProcesses.size() == 0)
-        // {
-        //     return true;
-        // }
 
         return false;
     }

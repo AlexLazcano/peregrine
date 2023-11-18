@@ -1212,6 +1212,8 @@ namespace Peregrine
   count(DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns, uint32_t nworkers, int world_rank, int world_size)
   {
     // initialize
+
+    const int MASTER_NODE = 0;
     std::vector<std::pair<SmallGraph, uint64_t>> results;
     if (patterns.empty()) return results;
 
@@ -1282,10 +1284,12 @@ namespace Peregrine
     dg->set_known_labels(new_patterns);
     std::vector<std::thread> coordinatorPool;
 
-    if (world_rank == 0)
+    if (world_rank == MASTER_NODE)
     {
       Peregrine::VertexCoordinator coordinator(world_size-1, 100, nworkers);
-      
+      Peregrine::RangeQueue rq(world_rank, world_size);
+      rq.openSignal();
+
       // utils::timestamp_t vertexDistributionTime = 0;
       utils::timestamp_t patternProcessingTime = 0;
       for (const auto &p : new_patterns)
@@ -1297,9 +1301,23 @@ namespace Peregrine
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
         coordinator.update_number_tasks(num_tasks);
-        coordinator.update_step(std::floor(num_tasks/((world_size-1))+1)*nworkers*2);
-        
+        coordinator.update_step(std::floor(100));
+
         coordinator.coordinate();
+        rq.signalDone();
+        bool processesAreDone = false;
+        while (true)
+        {
+          processesAreDone = rq.handleSignal();
+          if (processesAreDone)
+          {
+            break;
+          }
+          // std::this_thread::sleep_for(std::chrono::seconds(1));
+          // printf("MASTER WAITING\n");
+          // rq.printActive();
+        }
+        // printf("MASTER %d Recv DONE\n", world_rank);
 
         coordinator.reset();
         MPI_Barrier(MPI_COMM_WORLD);
@@ -1366,12 +1384,32 @@ namespace Peregrine
       Context::gcount = 0;
       Context::rQueue->resetVector();
 
+      Context::rQueue->openSignal();
 
       // set new pattern
       dg->set_rbi(p);
 
       // begin matching
       barrier.release();
+      bool currentProcessDone = false;
+
+      bool processesAreDone = false;
+      while (true)
+      {
+        processesAreDone = Context::rQueue->handleSignal();
+
+        if (Context::rQueue->isQueueEmpty() && !currentProcessDone)
+        {
+          Context::rQueue->signalDone();
+          currentProcessDone = true;
+          break;
+        }
+        if (processesAreDone && currentProcessDone)
+        {
+          break;
+        }
+      }
+      // printf("Rank %d Recv DONE\n", world_rank);
 
       // sleep until matching finished
       barrier.join();
