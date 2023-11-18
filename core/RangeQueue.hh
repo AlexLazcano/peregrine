@@ -29,9 +29,7 @@ namespace Peregrine
         std::mutex mtx;
         std::mutex rangeMtx;
         // TODO: Can make it better by stealing from back and having separate mtx?
-        // std::vector<std::pair<uint64_t, uint64_t>> range_vector;
-        std::deque<Range> range_queue;
-        // bool *finishedProcesses;
+        tbb::concurrent_queue<Range> concurrent_range_queue;
         int world_rank;
         int world_size;
         uint32_t nWorkers;
@@ -49,8 +47,7 @@ namespace Peregrine
         ~RangeQueue();
         void addRange(Range r);
         void fetchWorker(uint64_t num_tasks);
-        std::optional<Range> popLastRange();
-        std::optional<Range> popFirstRange();
+        std::optional<Range> popRange();
         void resetVector();
         void printRanges();
         bool stealRange();
@@ -210,46 +207,42 @@ namespace Peregrine
 
     void RangeQueue::addRange(Range r)
     {
-        std::lock_guard<std::mutex> lock(this->mtx);
-        range_queue.emplace_back(r);
+        concurrent_range_queue.push(r);
     }
 
-    std::optional<Range> RangeQueue::popLastRange()
+    std::optional<Range> RangeQueue::popRange()
     {
-        std::lock_guard<std::mutex> lock(this->mtx);
-        if (range_queue.empty())
+        Range value;
+        while (true)
         {
-            return std::nullopt;
+            bool success = concurrent_range_queue.try_pop(value);
+            if (success)
+            {
+                // printf("value: %ld %ld\n", value.first, value.second);
+                return value;
+            }
+            else if (this->isQueueEmpty())
+            {
+                return std::nullopt;
+            }
+
         }
 
-        Range last = range_queue.back();
-        range_queue.pop_back();
-        return last;
-    }
-
-    inline std::optional<Range> RangeQueue::popFirstRange()
-    {
-        std::lock_guard<std::mutex> lock(this->mtx);
-        if (this->range_queue.empty())
-        {
-            return std::nullopt;
-        }
-        Range first = range_queue.front();
-
-        range_queue.pop_front();
-        return first;
+        return std::nullopt;
     }
 
     inline void RangeQueue::resetVector()
     {
-        range_queue.clear();
+        concurrent_range_queue.clear();
     }
 
     inline void RangeQueue::printRanges()
     {
-        std::lock_guard<std::mutex> lock(this->mtx);
-        for (const auto &r : this->range_queue)
+        // std::lock_guard<std::mutex> lock(this->mtx);
+        typedef tbb::concurrent_queue<Range>::const_iterator iter;
+        for (iter i(concurrent_range_queue.unsafe_begin()); i != concurrent_range_queue.unsafe_end(); ++i)
         {
+            auto r = *i;
             printf("Range Queue: %d: %ld %ld \n", world_rank, r.first, r.second);
         }
     }
@@ -312,7 +305,7 @@ namespace Peregrine
     bool RangeQueue::handleRobbers()
     {
 
-        auto maybeRange = this->popFirstRange();
+        auto maybeRange = this->popRange();
         uint64_t buffer[2] = {0, 0};
         if (!maybeRange.has_value())
         {
@@ -332,7 +325,7 @@ namespace Peregrine
     }
     inline bool RangeQueue::isQueueEmpty()
     {
-        return this->range_queue.empty();
+        return this->concurrent_range_queue.empty();
     }
     RangeQueue::RangeQueue(int world_rank, int world_size, uint32_t nworkers = 1 )
     {

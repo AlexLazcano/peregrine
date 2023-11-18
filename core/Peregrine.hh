@@ -97,7 +97,7 @@ namespace Peregrine
 
     while (true)
     {
-      std::optional<Range> firstRange = Context::rQueue->popFirstRange();
+      std::optional<Range> firstRange = Context::rQueue->popRange();
       if (!firstRange.has_value())
       {
         break;
@@ -136,7 +136,7 @@ namespace Peregrine
     uint64_t lcount = 0;
     while (true)
     {
-      std::optional<Range> firstRange = Context::rQueue->popFirstRange();
+      std::optional<Range> firstRange = Context::rQueue->popRange();
       if (!firstRange.has_value())
       {
         return lcount;
@@ -1295,8 +1295,10 @@ namespace Peregrine
         uint32_t vgs_count = dg->get_vgs_count();
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
+        uint64_t step = std::floor(num_tasks/((world_size-1)*nworkers)) ;
+        printf("num tasks %ld step %ld\n", num_tasks,step);
         coordinator.update_number_tasks(num_tasks);
-        coordinator.update_step(std::floor(100));
+        coordinator.update_step(step);
 
         coordinator.coordinate();
         rq.signalDone();
