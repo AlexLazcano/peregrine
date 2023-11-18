@@ -166,19 +166,14 @@ namespace Peregrine
 
         // an extra pre-allocated cand vector for scratch space, and one for anti-vertex
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
+    // uint32_t num_vertices = dg->get_vertex_count();
+    // uint32_t vgs_count = dg->get_vgs_count();
+    // uint64_t num_tasks = num_vertices * vgs_count;
 
     while (b.hit())
     {
-      while (true)
-      {
-        auto range = Context::rQueue->request_range();
-
-        if (!range.has_value())
-        {
-          break;
-        }
-        Context::rQueue->addRange(range.value());
-      }
+      Context::rQueue->fetchWorker(1);
+      // printf("rank %d tid: %d fetched\n", 1, tid);
 
       Graph::Labelling L = dg->rbi.labelling_type();
       bool has_anti_edges = dg->rbi.has_anti_edges();

@@ -2,6 +2,7 @@
 #define RANGES_QUEUE_HH
 
 #include <mutex>
+#include <tbb/concurrent_queue.h>
 
 const int MPI_STEAL_CHANNEL = 5;
 const int MPI_STOLEN_CHANNEL = 6;
@@ -26,12 +27,14 @@ namespace Peregrine
     {
     private:
         std::mutex mtx;
+        std::mutex rangeMtx;
         // TODO: Can make it better by stealing from back and having separate mtx?
         // std::vector<std::pair<uint64_t, uint64_t>> range_vector;
         std::deque<Range> range_queue;
         // bool *finishedProcesses;
         int world_rank;
         int world_size;
+        uint32_t nWorkers;
         std::vector<int> activeProcesses;
         std::vector<int> signals;
         std::vector<MPI_Request> send_reqs;
@@ -42,9 +45,10 @@ namespace Peregrine
         MPI_Status robber_status;
 
     public:
-        RangeQueue(int world_rank, int world_size);
+        RangeQueue(int world_rank, int world_size, uint32_t nworkers);
         ~RangeQueue();
         void addRange(Range r);
+        void fetchWorker(uint64_t num_tasks);
         std::optional<Range> popLastRange();
         std::optional<Range> popFirstRange();
         void resetVector();
@@ -63,9 +67,29 @@ namespace Peregrine
         bool waitAllSends();
     };
 
+    void RangeQueue::fetchWorker(uint64_t num_tasks)
+    {
+        (void) num_tasks;
+
+        while (true)
+        {
+            auto maybeRange = this->request_range();
+
+            if (!maybeRange.has_value())
+            {
+                break;
+            }
+            auto range = maybeRange.value();
+
+            // printf("Rank %d recv %ld %ld %ld\n", world_rank, range.first, range.second, num_tasks);
+
+            this->addRange(range);
+        }
+    }
+
     std::optional<Range> RangeQueue::request_range()
     {
-
+        std::lock_guard<std::mutex> lock(this->rangeMtx);
         MPI_Status status;
         int count;
         uint64_t buffer[2];
@@ -218,7 +242,6 @@ namespace Peregrine
 
     inline void RangeQueue::resetVector()
     {
-        std::lock_guard<std::mutex> lock(this->mtx);
         range_queue.clear();
     }
 
@@ -311,10 +334,11 @@ namespace Peregrine
     {
         return this->range_queue.empty();
     }
-    RangeQueue::RangeQueue(int world_rank, int world_size)
+    RangeQueue::RangeQueue(int world_rank, int world_size, uint32_t nworkers = 1 )
     {
         this->world_rank = world_rank;
         this->world_size = world_size;
+        this->nWorkers = nworkers;
         for (int i = 0; i < this->world_size; i++)
         {
             // if (i == world_rank)
