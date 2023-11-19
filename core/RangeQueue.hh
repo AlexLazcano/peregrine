@@ -56,6 +56,7 @@ namespace Peregrine
         bool handleRobbers();
         bool isQueueEmpty();
         std::optional<Range> request_range();
+        void split_addRange(Range range, uint split);
         void openSignal();
         void signalDone();
         bool handleSignal();
@@ -66,7 +67,7 @@ namespace Peregrine
 
     void RangeQueue::fetchWorker(uint64_t num_tasks)
     {
-        (void) num_tasks;
+        (void)num_tasks;
 
         while (true)
         {
@@ -106,6 +107,48 @@ namespace Peregrine
             // Tag 1 - Got more ranges
             MPI_Recv(buffer, 2, MPI_UINT64_T, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             return Range(buffer[0], buffer[1]);
+        }
+    }
+    void Peregrine::RangeQueue::split_addRange(Range range, uint split)
+    {
+        if (split == 0)
+        {
+            throw std::invalid_argument("ERROR: split arg cannot be 0\n");
+        }
+
+        // printf("Split: %d\n", split);
+        // printf("Range: %ld %ld\n", range.first, range.second);
+
+        uint64_t span = range.second - range.first;
+
+        uint64_t elementsPerSplit = span / split;
+
+        if (span < split)
+        {
+            printf("Range too small\n");
+            this->addRange(range);
+            return;
+        }
+        // Initialize variables for tracking the current sub-range
+        uint64_t currentStart = range.first;
+        uint64_t currentEnd = currentStart + elementsPerSplit;
+
+        // Loop to create and process each sub-range
+        for (uint i = 0; i < split; ++i)
+        {
+            // Ensure the last sub-range covers any remaining elements
+            if (i == split - 1)
+            {
+                currentEnd = range.second;
+            }
+
+            // Process the current sub-range (you can replace this with your specific logic)
+            // printf("Sub-Range %d: %ld %ld\n", i + 1, currentStart, currentEnd);
+            this->addRange(Range(currentStart, currentEnd));
+
+            // Update for the next sub-range
+            currentStart = currentEnd;
+            currentEnd = currentStart + elementsPerSplit;
         }
     }
 
