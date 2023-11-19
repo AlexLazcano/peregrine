@@ -1284,8 +1284,10 @@ namespace Peregrine
       Peregrine::RangeQueue rq(world_rank, world_size);
       rq.openSignal();
 
-      // utils::timestamp_t vertexDistributionTime = 0;
+      utils::timestamp_t vertexDistributionTime = 0;
       utils::timestamp_t patternProcessingTime = 0;
+      utils::timestamp_t total_time = 0;
+      auto total1 = utils::get_timestamp();
       for (const auto &p : new_patterns)
       {
         auto t1 = utils::get_timestamp();
@@ -1298,8 +1300,9 @@ namespace Peregrine
         // printf("num tasks %ld step %ld\n", num_tasks,step);
         coordinator.update_number_tasks(num_tasks);
         coordinator.update_step(step);
-
+        auto vertex_t1 = utils::get_timestamp();
         coordinator.coordinate();
+        auto vertex_t2 = utils::get_timestamp();
         rq.signalDone();
         bool processesAreDone = false;
         while (true)
@@ -1316,9 +1319,10 @@ namespace Peregrine
         // printf("MASTER %d Recv DONE\n", world_rank);
 
         coordinator.reset();
-        MPI_Barrier(MPI_COMM_WORLD);
         auto t2 = utils::get_timestamp();
         patternProcessingTime += (t2 - t1);
+        vertexDistributionTime += (vertex_t2 - vertex_t1);
+        MPI_Barrier(MPI_COMM_WORLD);
       }
       
       std::vector<uint64_t> counts(patterns.size());
@@ -1327,6 +1331,9 @@ namespace Peregrine
       auto t1 = utils::get_timestamp();
       MPI_Reduce(zeros.data(), counts.data(), patterns.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
       auto t2 = utils::get_timestamp();
+      auto total2 = utils::get_timestamp();
+      total_time = total2 - total1;
+
 
       ReduceTime = t2-t1;
 
@@ -1352,9 +1359,10 @@ namespace Peregrine
       }
 
       utils::Log{} << "-------" << "\n";
-      // utils::Log{} << "Total Vertex Dist. Comm. " << vertexDistributionTime / 1e6 << "s" << "\n";
-      utils::Log{} << "Reduce Wait Time " << ReduceTime / 1e6 << "s" << "\n";
-      utils::Log{} << "DONE patterns finished after " << patternProcessingTime /1e6 << "s" << "\n";
+      utils::Log{} << "Work Distribution Time: " << vertexDistributionTime / 1e6 << "s" << "\n";
+      utils::Log{} << "Reduce Wait Time: " << ReduceTime / 1e6 << "s" << "\n";
+      utils::Log{} << "Processing Time: " << patternProcessingTime /1e6 << "s" << "\n";
+      utils::Log{} << "DONE patterns finished after: " << total_time /1e6 << "s" << "\n";      
       return results;
     }
 
@@ -1371,8 +1379,7 @@ namespace Peregrine
 
     // make sure the threads are all running
     barrier.join();
-
-    // auto t1 = utils::get_timestamp();
+    utils::timestamp_t node_wait_time = 0;
     for (const auto &p : new_patterns)
     {
       // reset state
@@ -1413,10 +1420,13 @@ namespace Peregrine
       // get counts
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
+      auto t1 = utils::get_timestamp();
       MPI_Barrier(MPI_COMM_WORLD);
+      auto t2 = utils::get_timestamp();
+      node_wait_time += (t2-t1);
+      
     }
-    // auto t2 = utils::get_timestamp();
-
+    utils::Log{} << "Rank " << world_rank << ": Time waited: " << node_wait_time / 1e6 << "s" << "\n";
 
     barrier.finish();
     for (auto &th : pool)

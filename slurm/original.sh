@@ -5,7 +5,7 @@
 #SBATCH --mem=5G
 #SBATCH --partition=fast
 #SBATCH --ntasks=1
+#SBATCH --nodelist=cs-cloud-04
 
-NUM=7
 
-srun /home/$USER/master/bin/count ../data/citeseer $NUM-motifs 6
+srun /home/$USER/master/bin/count ../data/citeseer 6-motifs 8

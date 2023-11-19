@@ -77,8 +77,7 @@ int main(int argc, char *argv[])
       std::cout << p << ": " << v << std::endl;
     }
   }
- 
-  printf("DONE Process %d\n", world_rank);
+  utils::Log{} << "DONE Process " << world_rank << "\n";
 
   MPI_Finalize();
   return 0;
