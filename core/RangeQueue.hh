@@ -41,12 +41,13 @@ namespace Peregrine
         MPI_Request stolen_req;
         int robber_buffer;
         MPI_Status robber_status;
+        bool done_requesting = false;
 
     public:
         RangeQueue(int world_rank, int world_size, uint32_t nworkers);
         ~RangeQueue();
         void addRange(Range r);
-        void fetchWorker(uint64_t num_tasks);
+        void fetchWorker();
         std::optional<Range> popRange();
         void resetVector();
         void printRanges();
@@ -63,11 +64,15 @@ namespace Peregrine
         void printActive();
         void printRecv();
         bool waitAllSends();
+        bool getDoneRequesting();
     };
 
-    void RangeQueue::fetchWorker(uint64_t num_tasks)
+    bool RangeQueue::getDoneRequesting(){ 
+        return done_requesting;
+    }
+
+    void RangeQueue::fetchWorker()
     {
-        (void)num_tasks;
 
         while (true)
         {
@@ -75,13 +80,14 @@ namespace Peregrine
 
             if (!maybeRange.has_value())
             {
+                this->done_requesting = true;
                 break;
             }
             auto range = maybeRange.value();
 
-            // printf("Rank %d recv %ld %ld %ld\n", world_rank, range.first, range.second, num_tasks);
+            // printf("Rank %d recv %ld %ld %d\n", world_rank, range.first, range.second, nWorkers);
 
-            this->addRange(range);
+            this->split_addRange(range, this->nWorkers);
         }
     }
 
@@ -143,7 +149,7 @@ namespace Peregrine
             }
 
             // Process the current sub-range (you can replace this with your specific logic)
-            // printf("Sub-Range %d: %ld %ld\n", i + 1, currentStart, currentEnd);
+            // printf("RANK %d Sub-Range %d: %ld %ld\n", i + 1, world_rank, currentStart, currentEnd);
             this->addRange(Range(currentStart, currentEnd));
 
             // Update for the next sub-range
@@ -264,11 +270,11 @@ namespace Peregrine
                 // printf("value: %ld %ld\n", value.first, value.second);
                 return value;
             }
-            else if (this->isQueueEmpty())
+            else if (this->done_requesting)
             {
                 return std::nullopt;
             }
-
+            // std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
         return std::nullopt;
@@ -276,6 +282,7 @@ namespace Peregrine
 
     inline void RangeQueue::resetVector()
     {
+        this->done_requesting = false;
         concurrent_range_queue.clear();
     }
 

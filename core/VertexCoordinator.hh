@@ -106,9 +106,10 @@ namespace Peregrine
         }
         VertexCoordinator(int numConsumers, int64_t steps_init, int nworkers)
         {
+            (void) nworkers; // FIXME: Need to fix issue with multiple coordinator workers, worker Nodes only send one message when they are done. 
             this->number_of_consumers = numConsumers;
             this->step = steps_init;
-            this->nWorkers = nworkers;
+            this->nWorkers = 1;
         }
 
         utils::timestamp_t coordinate()

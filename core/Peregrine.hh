@@ -143,7 +143,7 @@ namespace Peregrine
       }
 
       Range r = firstRange.value();
-      // printf("r %d first: %ld %ld\n", world_rank, r.first, r.second);
+      // printf("r %d first: %ld %ld\n", 1, r.first, r.second);
 
       uint64_t task = r.first;
       uint64_t num_tasks = r.second;
@@ -172,7 +172,6 @@ namespace Peregrine
 
     while (b.hit())
     {
-      Context::rQueue->fetchWorker(1);
       // printf("rank %d tid: %d fetched\n", 1, tid);
 
       Graph::Labelling L = dg->rbi.labelling_type();
@@ -1295,7 +1294,7 @@ namespace Peregrine
         uint32_t vgs_count = dg->get_vgs_count();
         uint32_t num_vertices = dg->get_vertex_count();
         uint64_t num_tasks = num_vertices * vgs_count;
-        uint64_t step = std::floor(num_tasks/((world_size-1)*nworkers)) ;
+        uint64_t step = std::floor(num_tasks/((world_size-1))) ;
         // printf("num tasks %ld step %ld\n", num_tasks,step);
         coordinator.update_number_tasks(num_tasks);
         coordinator.update_step(step);
@@ -1385,7 +1384,7 @@ namespace Peregrine
 
       // set new pattern
       dg->set_rbi(p);
-
+      Context::rQueue->fetchWorker();
       // begin matching
       barrier.release();
       bool currentProcessDone = false;
