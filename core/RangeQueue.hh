@@ -47,12 +47,13 @@ namespace Peregrine
         RangeQueue(int world_rank, int world_size, uint32_t nworkers);
         ~RangeQueue();
         void addRange(Range r);
-        void fetchWorker();
+        bool fetchWorker();
         std::optional<Range> popRange();
         void resetVector();
         void printRanges();
         bool stealRange();
         void initRobbers();
+        void finishRobbers();
         int checkRobbers();
         bool handleRobbers();
         bool isQueueEmpty();
@@ -71,7 +72,7 @@ namespace Peregrine
         return done_requesting;
     }
 
-    void RangeQueue::fetchWorker()
+    bool RangeQueue::fetchWorker()
     {
 
         while (true)
@@ -87,8 +88,9 @@ namespace Peregrine
 
             // printf("Rank %d recv %ld %ld %d\n", world_rank, range.first, range.second, nWorkers);
 
-            this->split_addRange(range, this->nWorkers);
+            this->split_addRange(range, this->nWorkers * this->world_size);
         }
+        return true;
     }
 
     std::optional<Range> RangeQueue::request_range()
@@ -306,19 +308,20 @@ namespace Peregrine
         {
             return true;
         }
-        
 
         for (const auto &activeRank : activeProcesses)
         {
-            if (activeRank == world_rank)
+            if (activeRank == world_rank || activeRank == 0)
             {
                continue;
             }
             
             printf("RANK %d stealing from %d\n", world_rank, activeRank);
             MPI_Send(&buffer, 1, MPI_UINT64_T, activeRank, MPI_STEAL_CHANNEL, MPI_COMM_WORLD);
-            MPI_Probe(activeRank, 6, MPI_COMM_WORLD, &status);
+            printf("Probing\n");
+            MPI_Probe(activeRank, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, &status);
             MPI_Get_count(&status, MPI_UINT64_T, &count);
+            printf("count stuck\n");
             if (count == 1)
             {
                 // Tag 6 - Returns false since could not get any more ranges
@@ -330,7 +333,7 @@ namespace Peregrine
             {
                 // Tag 6 - Got more ranges
                 MPI_Recv(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                printf("RANK %d recv %ld %ld\n", world_rank, buffer[0], buffer[1]);
+                // printf("RANK %d recv %ld %ld\n", world_rank, buffer[0], buffer[1]);
 
                 this->addRange(Range(buffer[0], buffer[1]));
             }
@@ -342,6 +345,15 @@ namespace Peregrine
     {
         int count = 1;
         MPI_Irecv(&robber_buffer, count, MPI_UINT64_T, MPI_ANY_SOURCE, MPI_STEAL_CHANNEL, MPI_COMM_WORLD, &robber_req);
+    }
+    void RangeQueue::finishRobbers()
+    {
+        if (!checkRobbers())
+        {
+
+            MPI_Cancel(&robber_req);
+            MPI_Wait(&robber_req, MPI_STATUS_IGNORE);
+        }
     }
 
     int RangeQueue::checkRobbers()
@@ -368,7 +380,7 @@ namespace Peregrine
         buffer[0] = range.first;
         buffer[1] = range.second;
 
-        printf("RANK %d sending to %d : (%ld %ld) \n", world_rank, robber_status.MPI_SOURCE, buffer[0], buffer[1]);
+        // printf("RANK %d sending to %d : (%ld %ld) \n", world_rank, robber_status.MPI_SOURCE, buffer[0], buffer[1]);
         MPI_Send(buffer, 2, MPI_UINT64_T, robber_status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD);
 
         return true;

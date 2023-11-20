@@ -1290,6 +1290,7 @@ namespace Peregrine
       auto total1 = utils::get_timestamp();
       for (const auto &p : new_patterns)
       {
+        rq.signalDone();
         auto t1 = utils::get_timestamp();
         // set new pattern
         dg->set_rbi(p);
@@ -1303,7 +1304,7 @@ namespace Peregrine
         auto vertex_t1 = utils::get_timestamp();
         coordinator.coordinate();
         auto vertex_t2 = utils::get_timestamp();
-        rq.signalDone();
+        
         bool processesAreDone = false;
         while (true)
         {
@@ -1366,7 +1367,7 @@ namespace Peregrine
       return results;
     }
 
-    Context::rQueue = std::make_shared<Peregrine::RangeQueue>(world_rank, world_size);
+    Context::rQueue = std::make_shared<Peregrine::RangeQueue>(world_rank, world_size, nworkers);
     
 
     for (uint32_t i = 0; i < nworkers; ++i)
@@ -1386,8 +1387,8 @@ namespace Peregrine
       Context::task_ctr = 0;
       Context::gcount = 0;
       Context::rQueue->resetVector();
-
       Context::rQueue->openSignal();
+      Context::rQueue->initRobbers();
 
       // set new pattern
       dg->set_rbi(p);
@@ -1395,23 +1396,42 @@ namespace Peregrine
       // begin matching
       barrier.release();
       bool currentProcessDone = false;
-
       bool processesAreDone = false;
       while (true)
       {
         processesAreDone = Context::rQueue->handleSignal();
-
+        int ready = Context::rQueue->checkRobbers();
+        if (ready)
+        {
+          bool success = Context::rQueue->handleRobbers();
+          if (success)
+          {
+            Context::rQueue-> initRobbers();
+          }
+          
+        }
+        
         if (Context::rQueue->isQueueEmpty() && !currentProcessDone)
         {
           Context::rQueue->signalDone();
           currentProcessDone = true;
           break;
         }
-        if (processesAreDone && currentProcessDone)
+      }
+       Context::rQueue->finishRobbers();
+      // Stealing work
+      while (true)
+      {
+        processesAreDone = Context::rQueue->handleSignal();
+        if (processesAreDone)
         {
           break;
         }
+        
+        Context::rQueue->stealRange();
       }
+     
+
       // printf("Rank %d Recv DONE\n", world_rank);
 
       // sleep until matching finished
