@@ -139,11 +139,16 @@ namespace Peregrine
       std::optional<Range> firstRange = Context::rQueue->popRange();
       if (!firstRange.has_value())
       {
-        return lcount;
+        if (Context::rQueue->done_stealing && Context::rQueue->isQueueEmpty())
+        {
+          break;
+        }
+
+        continue;
       }
 
       Range r = firstRange.value();
-      // printf("r %d first: %ld %ld\n", 1, r.first, r.second);
+      // printf("r %d first: %ld %ld\n", Context::rQueue->get_rank(), r.first, r.second);
 
       uint64_t task = r.first;
       uint64_t num_tasks = r.second;
@@ -1315,7 +1320,7 @@ namespace Peregrine
           }
           // std::this_thread::sleep_for(std::chrono::seconds(1));
           // printf("MASTER WAITING\n");
-          // rq.printActive();
+          // rq.showActive();
         }
         // printf("MASTER %d Recv DONE\n", world_rank);
 
@@ -1395,42 +1400,26 @@ namespace Peregrine
       Context::rQueue->fetchWorker();
       // begin matching
       barrier.release();
-      bool currentProcessDone = false;
+
       bool processesAreDone = false;
       while (true)
       {
         processesAreDone = Context::rQueue->handleSignal();
-        // int ready = Context::rQueue->checkRobbers();
-        // if (ready)
-        // {
-        //   bool success = Context::rQueue->handleRobbers();
-        //   if (success)
-        //   {
-        //     Context::rQueue-> initRobbers();
-        //   }
-          
-        // }
-        
-        if (Context::rQueue->isQueueEmpty() && !currentProcessDone)
+        if (processesAreDone)
         {
-          Context::rQueue->signalDone();
-          currentProcessDone = true;
+          Context::rQueue->done_stealing = true;
           break;
         }
-      }
-      Context::rQueue->finishRobbers();
-      // Stealing work
-      // while (true)
-      // {
-      //   processesAreDone = Context::rQueue->handleSignal();
-      //   if (processesAreDone)
-      //   {
-      //     break;
-      //   }
-        
-      //   Context::rQueue->stealRange();
-      // }
-     
+        int hasRobber = Context::rQueue->checkRobbers();
+        if (hasRobber)
+        {
+          Context::rQueue->handleRobbers();
+        }
+        if (Context::rQueue->done_ranges_given)
+        {
+          Context::rQueue->stealRangeAsync();
+        }
+            }
 
       // printf("Rank %d Recv DONE\n", world_rank);
 

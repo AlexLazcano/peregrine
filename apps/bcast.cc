@@ -35,13 +35,13 @@ int main(int argc, char const *argv[])
         {
             break;
         }
-        rq.printActive();
+        rq.showActive();
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     printf("RANK %d waiting\n", world_rank);
     MPI_Barrier(MPI_COMM_WORLD);
-    rq.printActive();
+    rq.showActive();
     rq.waitAllSends();
 
     printf("DONE Process %d\n", world_rank);

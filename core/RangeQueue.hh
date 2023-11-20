@@ -66,6 +66,7 @@ namespace Peregrine
         uint32_t nWorkers;
         std::vector<int> activeProcesses;
         std::vector<int> signals;
+        // std::vector<Range> work_range;
         std::vector<MPI_Request> send_reqs;
         std::vector<MPI_Request> recv_reqs;
         MPI_Request robber_req;
@@ -77,6 +78,7 @@ namespace Peregrine
     public:
         bool done_ranges_given = false;
         bool done_stealing = false;
+        int get_rank();
         RangeQueue(int world_rank, int world_size, uint32_t nworkers);
         ~RangeQueue();
         void addRange(Range r);
@@ -98,13 +100,18 @@ namespace Peregrine
         void openSignal();
         void signalDone();
         bool handleSignal();
-        void printActive();
+        void showActive();
+        // void showWork();
         void printRecv();
         bool waitAllSends();
         bool getDoneRequesting();
         void setDoneRequesting(bool b);
     };
 
+    int RangeQueue::get_rank()
+    {
+        return world_rank;
+    }
     bool RangeQueue::getDoneRequesting()
     {
         return done_requesting;
@@ -129,7 +136,7 @@ namespace Peregrine
 
             // printf("Rank %d recv %ld %ld %d\n", world_rank, range.first, range.second, nWorkers);
 
-            this->split_addRange(range, this->nWorkers * (this->world_size - 1));
+            this->split_addRange(range, this->nWorkers * (this->world_size - 1) * 10);
         }
         return true;
     }
@@ -273,14 +280,37 @@ namespace Peregrine
         MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
         if (flag && activeProcesses.size() == 0)
         {
-            printf("RANK %d ALL DONE\n", world_rank);
+            // printf("RANK %d ALL DONE\n", world_rank);
             return true;
         }
 
         return false;
     }
 
-    inline void RangeQueue::printActive()
+    // void RangeQueue::showWork()
+    // {
+    //     double count = 0.0;
+
+    //     // for (auto const &[first, second] : work_range)
+    //     // {
+    //     //     count += 1.0;
+    //     //     printf("Rank %d: %ld %ld \n", world_rank, first, second);
+    //     // }
+    //     double sum;
+        
+        
+    //     // MPI_Allreduce(&count, &sum, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+    //     // if (world_rank == 0)
+    //     // {
+    //     //     return;
+    //     // }
+
+    //     // double percent = count / (sum * world_size);
+
+    //     // MPI_Barrier(MPI_COMM_WORLD);
+    //     // printf("Work done by each process: %.1f / %.0f = %.1f  \n", count, sum * world_size, percent * 100);
+    // }
+    inline void RangeQueue::showActive()
     {
         printf("RANK: %d Active size: %ld\n", world_rank, activeProcesses.size());
         for (const auto &a : activeProcesses)
@@ -308,7 +338,6 @@ namespace Peregrine
         bool success = concurrent_range_queue.try_pop(value);
         if (success)
         {
-            // printf("value: %ld %ld\n", value.first, value.second);
             return value;
         }
         if (!done_ranges_given)
@@ -325,6 +354,7 @@ namespace Peregrine
     {
         this->done_requesting = false;
         this->done_ranges_given = false;
+        this->done_stealing = false;
         concurrent_range_queue.clear();
     }
 

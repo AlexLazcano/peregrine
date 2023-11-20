@@ -82,7 +82,7 @@ int main(int argc, char const *argv[])
                 // printf("Rank %d Did not receive\n", world_rank);
             }
         }
-        // rq.printActive();
+        // rq.showActive();
 
         // std::this_thread::sleep_for(std::chrono::seconds(1));
     }
