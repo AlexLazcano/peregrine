@@ -6,6 +6,7 @@
 
 const int MPI_STEAL_CHANNEL = 5;
 const int MPI_STOLEN_CHANNEL = 6;
+const int MPI_DONE_CHANNEL = 10;
 
 // Function to find and remove an element from the vector
 void findAndRemoveElement(std::vector<int> &processes, int rankToRemove)
@@ -171,7 +172,7 @@ namespace Peregrine
             if (src != world_rank)
             {
                 // printf("RANK %d recv %d in i: %i\n", world_rank, src, i);
-                MPI_Irecv(&signals[i], 1, MPI_INT, src, 10, MPI_COMM_WORLD, &recv_reqs[i]);
+                MPI_Irecv(&signals[i], 1, MPI_INT, src, MPI_DONE_CHANNEL, MPI_COMM_WORLD, &recv_reqs[i]);
                 i++;
             }
         }
@@ -186,7 +187,7 @@ namespace Peregrine
             if (dest != world_rank)
             {
                 int signal = this->world_rank;
-                MPI_Isend(&signal, 1, MPI_INT, dest, 10, MPI_COMM_WORLD, &send_reqs[i]);
+                MPI_Isend(&signal, 1, MPI_INT, dest, MPI_DONE_CHANNEL, MPI_COMM_WORLD, &send_reqs[i]);
                 // printf("RANK %d send %d in i: %d - %d \n", world_rank, dest, i, send_reqs[i]);
                 i++;
             }
@@ -232,9 +233,9 @@ namespace Peregrine
 
         int flag = 0;
         MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
-        if (flag)
+        if (flag && activeProcesses.size() == 0)
         {
-            // printf("RANK %d ALL DONE\n", world_rank);
+            printf("RANK %d ALL DONE\n", world_rank);
             return true;
         }
 
@@ -313,7 +314,7 @@ namespace Peregrine
 
         for (const auto &activeRank : activeProcesses)
         {
-            if (activeRank == world_rank || activeRank == 0)
+            if (activeRank == world_rank) // || activeRank == 0)
             {
                continue;
             }
