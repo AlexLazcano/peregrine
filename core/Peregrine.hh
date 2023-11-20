@@ -1400,16 +1400,16 @@ namespace Peregrine
       while (true)
       {
         processesAreDone = Context::rQueue->handleSignal();
-        int ready = Context::rQueue->checkRobbers();
-        if (ready)
-        {
-          bool success = Context::rQueue->handleRobbers();
-          if (success)
-          {
-            Context::rQueue-> initRobbers();
-          }
+        // int ready = Context::rQueue->checkRobbers();
+        // if (ready)
+        // {
+        //   bool success = Context::rQueue->handleRobbers();
+        //   if (success)
+        //   {
+        //     Context::rQueue-> initRobbers();
+        //   }
           
-        }
+        // }
         
         if (Context::rQueue->isQueueEmpty() && !currentProcessDone)
         {
@@ -1418,18 +1418,18 @@ namespace Peregrine
           break;
         }
       }
-       Context::rQueue->finishRobbers();
+      Context::rQueue->finishRobbers();
       // Stealing work
-      while (true)
-      {
-        processesAreDone = Context::rQueue->handleSignal();
-        if (processesAreDone)
-        {
-          break;
-        }
+      // while (true)
+      // {
+      //   processesAreDone = Context::rQueue->handleSignal();
+      //   if (processesAreDone)
+      //   {
+      //     break;
+      //   }
         
-        Context::rQueue->stealRange();
-      }
+      //   Context::rQueue->stealRange();
+      // }
      
 
       // printf("Rank %d Recv DONE\n", world_rank);
