@@ -69,7 +69,8 @@ namespace Peregrine
         bool getDoneRequesting();
     };
 
-    bool RangeQueue::getDoneRequesting(){ 
+    bool RangeQueue::getDoneRequesting()
+    {
         return done_requesting;
     }
 
@@ -89,7 +90,7 @@ namespace Peregrine
 
             // printf("Rank %d recv %ld %ld %d\n", world_rank, range.first, range.second, nWorkers);
 
-            this->split_addRange(range, this->nWorkers * this->world_size);
+            this->split_addRange(range, this->nWorkers * (this->world_size - 1));
         }
         return true;
     }
