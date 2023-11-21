@@ -142,6 +142,7 @@ namespace Peregrine
             // printf("Rank %d recv %ld %ld %d\n", world_rank, range.first, range.second, nWorkers);
 
             this->split_addRange(range, this->nWorkers * (this->world_size - 1) * 10);
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
         }
         return true;
     }
@@ -186,7 +187,7 @@ namespace Peregrine
 
         if (span < split)
         {
-            printf("Range too small\n");
+            // printf("Range too small\n");
             this->addRange(range);
             return;
         }
@@ -452,9 +453,9 @@ namespace Peregrine
     {
         int count;
         int success = MPI_Probe(activeRank, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, status);
-        printf("Probing %d - %d\n", success, status->MPI_ERROR);
+        // printf("Probing %d - %d\n", success, status->MPI_ERROR);
         MPI_Get_count(status, MPI_UINT64_T, &count);
-        printf("count stuck\n");
+        // printf("count stuck\n");
 
         if (count == 1)
         {
@@ -466,7 +467,7 @@ namespace Peregrine
         {
             // Tag 6 - Got more ranges
             MPI_Recv(buffer, 2, MPI_UINT64_T, status->MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            printf("RANK %d recv %ld %ld\n", world_rank, buffer[0], buffer[1]);
+            // printf("RANK %d recv %ld %ld\n", world_rank, buffer[0], buffer[1]);
 
             this->addRange(Range(buffer[0], buffer[1]));
         }

@@ -1415,14 +1415,14 @@ namespace Peregrine
         int hasRobber = Context::rQueue->checkRobbers();
         if (hasRobber)
         {
-          printf("Rank %d Has robbers\n", world_rank);
+          // printf("Rank %d Has robbers\n", world_rank);
           Context::rQueue->handleRobbers();
         }
         if (Context::rQueue->done_ranges_given)
         {
           Context::rQueue->stealRangeAsync();
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
       }
 
       // printf("Rank %d Recv DONE\n", world_rank);
