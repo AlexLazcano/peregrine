@@ -120,7 +120,7 @@ namespace Peregrine
         {
             std::vector<Range> sections;
 
-            printf("Full Range: %ld %ld\n", range.first, range.second);
+            // printf("Full Range: %ld %ld\n", range.first, range.second);
 
             if (split == 0)
             {
@@ -190,6 +190,7 @@ namespace Peregrine
                 // MPI_Barrier(MPI_COMM_WORLD);
             }
         }
+        // printf("Rank %d done requesting\n", world_rank);
         done_requesting = true;
     }
     std::vector<uint64_t> RangeQueue::splitRangeForScatter(Range range)
@@ -492,7 +493,15 @@ namespace Peregrine
     {
         this->done_requesting = false;
         this->done_ranges_given = false;
-        this->done_stealing = false;
+        if (world_size > 1)
+        {
+            this->done_stealing = false;
+        }
+        else
+        {
+            this->done_stealing = true;
+        }
+
         concurrent_range_queue.clear();
     }
 

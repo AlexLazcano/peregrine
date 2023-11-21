@@ -1397,8 +1397,14 @@ namespace Peregrine
       Context::task_ctr = 0;
       Context::gcount = 0;
       Context::rQueue->resetVector();
-      Context::rQueue->openSignal();
-      Context::rQueue->initRobbers();
+      if (world_size > 1)
+      {
+        Context::rQueue->openSignal();
+        Context::rQueue->initRobbers();
+      }
+
+      // set new pattern
+      dg->set_rbi(p);
       uint32_t vgs_count = dg->get_vgs_count();
       uint32_t num_vertices = dg->get_vertex_count();
       uint64_t num_tasks = num_vertices * vgs_count;
@@ -1406,27 +1412,32 @@ namespace Peregrine
       // Context::rQueue->printRanges();
       // begin matching
       barrier.release();
-
-      bool processesAreDone = false;
-      while (true)
+      if (world_size > 1)
       {
-        processesAreDone = Context::rQueue->handleSignal();
-        if (processesAreDone)
+        bool processesAreDone = false;
+        while (true)
         {
-          Context::rQueue->done_stealing = true;
-          break;
+          processesAreDone = Context::rQueue->handleSignal();
+          if (processesAreDone)
+          {
+            Context::rQueue->done_stealing = true;
+            break;
+          }
+          int hasRobber = Context::rQueue->checkRobbers();
+          if (hasRobber)
+          {
+            // printf("Rank %d Has robbers\n", world_rank);
+            Context::rQueue->handleRobbers();
+          }
+          if (Context::rQueue->done_ranges_given)
+          {
+            Context::rQueue->stealRangeAsync();
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
-        int hasRobber = Context::rQueue->checkRobbers();
-        if (hasRobber)
-        {
-          // printf("Rank %d Has robbers\n", world_rank);
-          Context::rQueue->handleRobbers();
-        }
-        if (Context::rQueue->done_ranges_given)
-        {
-          Context::rQueue->stealRangeAsync();
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      }
+      else
+      {
       }
 
       // // printf("Rank %d Recv DONE\n", world_rank);
