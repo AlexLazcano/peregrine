@@ -107,7 +107,139 @@ namespace Peregrine
         bool getDoneRequesting();
         bool noMoreActive();
         void setDoneRequesting(bool b);
+        void coordinateScatter(Range full_range);
+        std::vector<uint64_t> splitRangeForScatter(Range range);
     };
+
+    void RangeQueue::coordinateScatter(Range range)
+    {
+        uint split = world_size;
+        uint64_t recv[2] = {0, 0};
+
+        if (world_rank == 0)
+        {
+            std::vector<Range> sections;
+
+            printf("Full Range: %ld %ld\n", range.first, range.second);
+
+            if (split == 0)
+            {
+                throw std::invalid_argument("ERROR: split arg cannot be 0\n");
+            }
+
+            // printf("Split: %d\n", split);
+            // printf("Range: %ld %ld\n", range.first, range.second);
+
+            uint64_t span = range.second - range.first;
+
+            uint64_t elementsPerSplit = span / split;
+
+            if (span < split)
+            {
+                // printf("Range too small\n");
+                sections.emplace_back(range);
+                return;
+            }
+            // Initialize variables for tracking the current sub-range
+            uint64_t currentStart = range.first;
+            uint64_t currentEnd = currentStart + elementsPerSplit;
+
+            // Loop to create and process each sub-range
+            for (uint i = 0; i < split; ++i)
+            {
+                // Ensure the last sub-range covers any remaining elements
+                if (i == split - 1)
+                {
+                    currentEnd = range.second;
+                }
+
+                // Process the current sub-range (you can replace this with your specific logic)
+                // printf("RANK %d Sub-Range %d: %ld %ld\n", i + 1, world_rank, currentStart, currentEnd);
+
+                sections.emplace_back(Range(currentStart, currentEnd));
+                // Update for the next sub-range
+                currentStart = currentEnd;
+                currentEnd = currentStart + elementsPerSplit;
+            }
+            int i = 0;
+            for (const auto &s : sections)
+            {
+
+                // printf("i: %d - (%ld %ld)\n", i, s.first, s.second);
+                auto buffer = splitRangeForScatter(s);
+
+                auto array = buffer.data();
+
+                MPI_Scatter(array, 2, MPI_UINT64_T, &recv, 2, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+                printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
+                split_addRange(Range(recv[0], recv[1]), nWorkers);
+                i++;
+                // MPI_Barrier(MPI_COMM_WORLD);
+            }
+        }
+        else
+        {
+            uint64_t dummy;
+
+            for (int i = 0; i < world_size; i++)
+            {
+
+                MPI_Scatter(&dummy, 2, MPI_UINT64_T, &recv, 2, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+                printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
+                split_addRange(Range(recv[0], recv[1]), nWorkers);
+                // MPI_Barrier(MPI_COMM_WORLD);
+            }
+        }
+    }
+    std::vector<uint64_t> RangeQueue::splitRangeForScatter(Range range)
+    {
+        std::vector<uint64_t> ranges;
+        uint split = world_size;
+        // printf("Range: %ld %ld\n", range.first, range.second);
+
+        if (split == 0)
+        {
+            throw std::invalid_argument("ERROR: split arg cannot be 0\n");
+        }
+
+        // printf("Split: %d\n", split);
+        // printf("Range: %ld %ld\n", range.first, range.second);
+
+        uint64_t span = range.second - range.first;
+
+        uint64_t elementsPerSplit = span / split;
+
+        if (span < split)
+        {
+            // printf("Range too small\n");
+            ranges.emplace_back(range.first);
+            ranges.emplace_back(range.second);
+            return ranges;
+        }
+        // Initialize variables for tracking the current sub-range
+        uint64_t currentStart = range.first;
+        uint64_t currentEnd = currentStart + elementsPerSplit;
+
+        // Loop to create and process each sub-range
+        for (uint i = 0; i < split; ++i)
+        {
+            // Ensure the last sub-range covers any remaining elements
+            if (i == split - 1)
+            {
+                currentEnd = range.second;
+            }
+
+            // Process the current sub-range (you can replace this with your specific logic)
+            // printf("RANK %d Sub-Range %d: %ld %ld\n", i + 1, world_rank, currentStart, currentEnd);
+
+            ranges.emplace_back(currentStart);
+            ranges.emplace_back(currentEnd);
+            // Update for the next sub-range
+            currentStart = currentEnd;
+            currentEnd = currentStart + elementsPerSplit;
+        }
+        return ranges;
+    }
 
     int RangeQueue::get_rank()
     {
@@ -303,8 +435,7 @@ namespace Peregrine
     //     //     printf("Rank %d: %ld %ld \n", world_rank, first, second);
     //     // }
     //     double sum;
-        
-        
+
     //     // MPI_Allreduce(&count, &sum, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
     //     // if (world_rank == 0)
     //     // {
@@ -394,7 +525,7 @@ namespace Peregrine
 
             printf("RANK %d stealing from %d\n", world_rank, activeRank);
             MPI_Send(&buffer, 1, MPI_UINT64_T, activeRank, MPI_STEAL_CHANNEL, MPI_COMM_WORLD);
-            recvStolen(buffer, activeRank, &status); 
+            recvStolen(buffer, activeRank, &status);
         }
         return false;
     }
@@ -410,7 +541,7 @@ namespace Peregrine
         {
             return false;
         }
-        
+
         // printf("Rank %d attemting stealing from %d\n", world_rank, lowestRank);
         MPI_Isend(&buffer, 1, MPI_UINT64_T, lowestRank, MPI_STEAL_CHANNEL, MPI_COMM_WORLD, &request);
 
@@ -525,7 +656,7 @@ namespace Peregrine
     {
         return this->concurrent_range_queue.empty();
     }
-    RangeQueue::RangeQueue(int world_rank, int world_size, uint32_t nworkers = 1 )
+    RangeQueue::RangeQueue(int world_rank, int world_size, uint32_t nworkers = 1)
     {
         this->world_rank = world_rank;
         this->world_size = world_size;
