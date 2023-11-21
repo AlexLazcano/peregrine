@@ -23,19 +23,13 @@ int main(int argc, char const *argv[])
         while (true)
         {
             auto maybeRange = rq.popRange();
-            if (world_rank % 2 == 0)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds((world_rank+1) * 5));
-            }
-            else
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds((world_rank) * 50));
-            }
+            std::this_thread::sleep_for(std::chrono::milliseconds((world_rank+1)*50));
+            
 
             if (!maybeRange.has_value())
             {
 
-                if (rq.done_stealing && rq.isQueueEmpty())
+                if (rq.done_stealing && rq.noMoreActive())
                 {
                     break;
                 }
@@ -52,9 +46,12 @@ int main(int argc, char const *argv[])
 
     // Requesting Ranges
     int size = 100;
+    int chunk_size = 5;
+    int num_chunks = (size + chunk_size - 1) / chunk_size;
     Peregrine::Range range(world_rank * size, (world_rank + 1) * size);
-    rq.split_addRange(range, size);
+    rq.xPerSplit_addRange(range, 5);
     // Processing current ranges ranges
+    // rq.printRanges();
 
     std::thread th(do_work, &work_done);
 
@@ -84,7 +81,7 @@ int main(int argc, char const *argv[])
         }
         // rq.showActive();
 
-        // std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     printf("Rank %d waiting for thread\n", world_rank);
     th.join();
@@ -96,10 +93,10 @@ int main(int argc, char const *argv[])
         printf("Rank %d: %ld %ld \n", world_rank, first, second);
     }
 
-    double percent = count / (size * world_size);
+    double percent = count / (num_chunks * world_size);
 
     MPI_Barrier(MPI_COMM_WORLD);
-    printf("Work done by each process: %.1f / %d = %.1f%\n", count, size * world_size, percent * 100);
+    printf("Work done by %d process: %.1f / %d = %.1f%\n", world_rank, count, num_chunks * world_size, percent * 100);
 
     printf("DONE Process %d\n", world_rank);
 

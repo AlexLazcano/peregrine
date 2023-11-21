@@ -121,7 +121,7 @@ namespace Peregrine
         if constexpr (OnTheFly == ON_THE_FLY)
         {
           a->submit();
-        }
+        } 
         task++;
       }
     }
@@ -137,6 +137,7 @@ namespace Peregrine
     while (true)
     {
       std::optional<Range> firstRange = Context::rQueue->popRange();
+      // std::this_thread::sleep_for(std::chrono::milliseconds(Context::rQueue->get_rank()*250));
       if (!firstRange.has_value())
       {
         // FIXME: Finishing logic might need revising, Sometimes, there are counts missing from sum. 
@@ -144,7 +145,7 @@ namespace Peregrine
         {
           break;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
       }
 
@@ -1412,6 +1413,7 @@ namespace Peregrine
       uint32_t vgs_count = dg->get_vgs_count();
       uint32_t num_vertices = dg->get_vertex_count();
       uint64_t num_tasks = num_vertices * vgs_count;
+      // printf("num tasks %ld\n", num_tasks);
       auto dist_time1 = utils::get_timestamp();
       Context::rQueue->coordinateScatter(Range(0, num_tasks + 1));
       auto dist_time2 = utils::get_timestamp();

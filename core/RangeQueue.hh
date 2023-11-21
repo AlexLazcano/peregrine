@@ -59,6 +59,7 @@ namespace Peregrine
     private:
         std::mutex mtx;
         std::mutex rangeMtx;
+        std::atomic_flag done_ranges_given_flag = ATOMIC_FLAG_INIT;
         // TODO: Can make it better by stealing from back and having separate mtx?
         tbb::concurrent_queue<Range> concurrent_range_queue;
         int world_rank;
@@ -76,7 +77,7 @@ namespace Peregrine
         bool done_requesting = false;
 
     public:
-        bool done_ranges_given = false;
+        std::atomic<bool> done_ranges_given = false;
         bool done_stealing = false;
         int get_rank();
         RangeQueue(int world_rank, int world_size, uint32_t nworkers);
@@ -97,6 +98,7 @@ namespace Peregrine
         bool isQueueEmpty();
         std::optional<Range> request_range();
         void split_addRange(Range range, uint split);
+        void xPerSplit_addRange(Range, uint64_t x);
         void openSignal();
         void signalDone();
         bool handleSignal();
@@ -115,6 +117,8 @@ namespace Peregrine
     {
         uint split = world_size;
         uint64_t recv[2] = {0, 0};
+
+        uint64_t elementsPerChunk = 20;
 
         if (world_rank == 0)
         {
@@ -172,7 +176,8 @@ namespace Peregrine
 
                 MPI_Scatter(array, 2, MPI_UINT64_T, &recv, 2, MPI_UINT64_T, 0, MPI_COMM_WORLD);
                 // printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
-                split_addRange(Range(recv[0], recv[1]), nWorkers);
+                // split_addRange(Range(recv[0], recv[1]), nWorkers);
+                xPerSplit_addRange(Range(recv[0], recv[1]), elementsPerChunk);
                 i++;
                 // MPI_Barrier(MPI_COMM_WORLD);
             }
@@ -186,7 +191,9 @@ namespace Peregrine
 
                 MPI_Scatter(&dummy, 2, MPI_UINT64_T, &recv, 2, MPI_UINT64_T, 0, MPI_COMM_WORLD);
                 // printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
-                split_addRange(Range(recv[0], recv[1]), nWorkers);
+                // split_addRange(Range(recv[0], recv[1]), nWorkers);
+                xPerSplit_addRange(Range(recv[0], recv[1]), elementsPerChunk);
+
                 // MPI_Barrier(MPI_COMM_WORLD);
             }
         }
@@ -305,6 +312,43 @@ namespace Peregrine
             return Range(buffer[0], buffer[1]);
         }
     }
+
+    void Peregrine::RangeQueue::xPerSplit_addRange(Range range, uint64_t x)
+    {
+        if (x <= 0)
+        {
+            throw std::invalid_argument("ERROR: x (number of elements per sub-range) cannot be 0\n");
+        }
+
+        // Calculate the total number of elements in the range
+        uint64_t span = range.second - range.first;
+
+        // Calculate the number of splits required
+        uint64_t numSplits = (span + x - 1) / x; // Round up to ensure all elements are covered
+
+        // Initialize variables for tracking the current sub-range
+        uint64_t currentStart = range.first;
+        uint64_t currentEnd = currentStart + x;
+
+        // Loop to create and process each sub-range
+        for (uint64_t i = 0; i < numSplits; ++i)
+        {
+            // Ensure the last sub-range covers any remaining elements
+            if (i == numSplits - 1)
+            {
+                currentEnd = range.second;
+            }
+
+            // Process the current sub-range (you can replace this with your specific logic)
+            // printf("RANK %d Sub-Range %ld: %ld %ld\n", world_rank, i + 1, currentStart, currentEnd);
+            this->addRange(Range(currentStart, currentEnd));
+
+            // Update for the next sub-range
+            currentStart = currentEnd;
+            currentEnd = std::min(currentStart + x, range.second);
+        }
+    }
+
     void Peregrine::RangeQueue::split_addRange(Range range, uint split)
     {
         if (split == 0)
@@ -420,7 +464,7 @@ namespace Peregrine
         MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
         if (flag && activeProcesses.size() == 0)
         {
-            // printf("RANK %d ALL DONE\n", world_rank);
+            printf("RANK %d ALL DONE\n", world_rank);
             return true;
         }
 
@@ -479,11 +523,18 @@ namespace Peregrine
         {
             return value;
         }
-        if (!done_ranges_given)
+        if (!done_ranges_given.load(std::memory_order_acquire))
         {
-            // printf("Rank %d done ranges\n", world_rank);
-            signalDone();
-            done_ranges_given = true;
+            // Try to set the flag; if it was already set, another thread has entered the block
+            if (!done_ranges_given_flag.test_and_set(std::memory_order_acquire))
+            {
+                // This thread successfully set the flag; execute the block
+                // printf("Rank %d done ranges\n", world_rank);
+                signalDone();
+                done_ranges_given = true;
+                done_ranges_given_flag.clear(std::memory_order_release); // Release the flag
+            }
+            // If the flag was already set, another thread has already executed the block, so skip it
         }
 
         return std::nullopt;
@@ -581,7 +632,7 @@ namespace Peregrine
             {
                 // Tag 6 - Got more ranges
                 MPI_Recv(buffer, 2, MPI_UINT64_T, status->MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                printf("RANK %d stole (%ld %ld) from: %d \n", world_rank, buffer[0], buffer[1], status->MPI_SOURCE);
+                // printf("RANK %d stole (%ld %ld) from: %d \n", world_rank, buffer[0], buffer[1], status->MPI_SOURCE);
 
                 this->addRange(Range(buffer[0], buffer[1]));
             }
