@@ -20,6 +20,7 @@ int main(int argc, char const *argv[])
     auto t2 = utils::get_timestamp();
     utils::Log{} << "Work Distribution Time: " << (t2-t1) / 1e6 << "s" << "\n";
 
+    rq.printRanges();
     printf("DONE Process %d\n", world_rank);
     MPI_Finalize();
     return 0;

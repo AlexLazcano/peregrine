@@ -48,6 +48,9 @@ steal: apps/steal.cc $(OBJ) bliss
 bcast: apps/bcast.cc $(OBJ) bliss
 	$(MPICC) apps/bcast.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
+scatter: apps/scatter.cc $(OBJ) bliss
+	$(MPICC) apps/scatter.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+
 output: apps/output.cc $(OBJ) bliss
 	$(CC) apps/output.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 

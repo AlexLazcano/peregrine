@@ -171,7 +171,7 @@ namespace Peregrine
                 auto array = buffer.data();
 
                 MPI_Scatter(array, 2, MPI_UINT64_T, &recv, 2, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-                printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
+                // printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
                 split_addRange(Range(recv[0], recv[1]), nWorkers);
                 i++;
                 // MPI_Barrier(MPI_COMM_WORLD);
@@ -185,7 +185,7 @@ namespace Peregrine
             {
 
                 MPI_Scatter(&dummy, 2, MPI_UINT64_T, &recv, 2, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-                printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
+                // printf("Rank %d recv %ld %ld\n", world_rank, recv[0], recv[1]);
                 split_addRange(Range(recv[0], recv[1]), nWorkers);
                 // MPI_Barrier(MPI_COMM_WORLD);
             }
