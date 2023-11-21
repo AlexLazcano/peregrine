@@ -1388,7 +1388,9 @@ namespace Peregrine
 
     // make sure the threads are all running
     barrier.join();
-    utils::timestamp_t node_wait_time = 0;
+    // utils::timestamp_t node_wait_time = 0;
+    utils::timestamp_t patternProcessingTime = 0;
+    auto total_time1 = utils::get_timestamp();
     for (const auto &p : new_patterns)
     {
       // reset state
@@ -1400,9 +1402,6 @@ namespace Peregrine
       uint32_t vgs_count = dg->get_vgs_count();
       uint32_t num_vertices = dg->get_vertex_count();
       uint64_t num_tasks = num_vertices * vgs_count;
-
-      // set new pattern
-      dg->set_rbi(p);
       Context::rQueue->coordinateScatter(Range(0, num_tasks + 1));
       // Context::rQueue->printRanges();
       // begin matching
@@ -1438,13 +1437,13 @@ namespace Peregrine
       // get counts
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
-      auto t1 = utils::get_timestamp();
+      // auto t1 = utils::get_timestamp();
       MPI_Barrier(MPI_COMM_WORLD);
-      auto t2 = utils::get_timestamp();
-      node_wait_time += (t2-t1);
-      
+      // auto t2 = utils::get_timestamp();
+      // node_wait_time += (t2-t1);
     }
-    utils::Log{} << "Rank " << world_rank << ": Time waited: " << node_wait_time / 1e6 << "s" << "\n";
+    auto total_time2 = utils::get_timestamp();
+    // utils::Log{} << "Rank " << world_rank << ": Time waited: " << node_wait_time / 1e6 << "s" << "\n";
 
     barrier.finish();
     for (auto &th : pool)
@@ -1477,6 +1476,13 @@ namespace Peregrine
       {
         final_results = convert_counts(final_results, patterns);
       }
+
+      utils::Log{} << "-------"<< "\n";
+      // utils::Log{} << "Work Distribution Time: " << vertexDistributionTime / 1e6 << "s" << "\n";
+      // utils::Log{} << "Reduce Wait Time: " << ReduceTime / 1e6 << "s" << "\n";
+      patternProcessingTime += (total_time2 - total_time1);
+      utils::Log{} << "Processing Time: " << patternProcessingTime / 1e6 << "s"<< "\n";
+      // utils::Log{} << "DONE patterns finished after: " << total_time /1e6 << "s" << "\n";
     }
 
     if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
