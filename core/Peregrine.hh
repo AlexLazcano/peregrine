@@ -1390,6 +1390,10 @@ namespace Peregrine
     barrier.join();
     // utils::timestamp_t node_wait_time = 0;
     utils::timestamp_t patternProcessingTime = 0;
+    utils::timestamp_t vertexDistributionTime = 0;
+    utils::timestamp_t node_wait_time = 0;
+
+
     auto total_time1 = utils::get_timestamp();
     for (const auto &p : new_patterns)
     {
@@ -1408,7 +1412,10 @@ namespace Peregrine
       uint32_t vgs_count = dg->get_vgs_count();
       uint32_t num_vertices = dg->get_vertex_count();
       uint64_t num_tasks = num_vertices * vgs_count;
+      auto dist_time1 = utils::get_timestamp();
       Context::rQueue->coordinateScatter(Range(0, num_tasks + 1));
+      auto dist_time2 = utils::get_timestamp();
+      vertexDistributionTime += (dist_time2 - dist_time1);
       // Context::rQueue->printRanges();
       // begin matching
       barrier.release();
@@ -1448,13 +1455,13 @@ namespace Peregrine
       // get counts
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
-      // auto t1 = utils::get_timestamp();
+      auto t1 = utils::get_timestamp();
       MPI_Barrier(MPI_COMM_WORLD);
-      // auto t2 = utils::get_timestamp();
-      // node_wait_time += (t2-t1);
+      auto t2 = utils::get_timestamp();
+      node_wait_time += (t2-t1);
     }
     auto total_time2 = utils::get_timestamp();
-    // utils::Log{} << "Rank " << world_rank << ": Time waited: " << node_wait_time / 1e6 << "s" << "\n";
+    utils::Log{} << "Rank " << world_rank << ": Time waited: " << node_wait_time / 1e6 << "s" << "\n";
 
     barrier.finish();
     for (auto &th : pool)
@@ -1469,7 +1476,11 @@ namespace Peregrine
     }
 
     std::vector<uint64_t> counts(patterns.size());
+    auto reduce_time1 = utils::get_timestamp();
     MPI_Reduce(sendBuffer.data(), counts.data(), sendBuffer.size(), MPI_UINT64_T, MPI_SUM, 0, MPI_COMM_WORLD);
+    auto reduce_time2 = utils::get_timestamp();
+    auto reduceTime = (reduce_time2 - reduce_time1);
+
     std::vector<std::pair<SmallGraph, uint64_t>> final_results;
     if (world_rank == MASTER_NODE)
     {
@@ -1489,8 +1500,8 @@ namespace Peregrine
       }
 
       utils::Log{} << "-------"<< "\n";
-      // utils::Log{} << "Work Distribution Time: " << vertexDistributionTime / 1e6 << "s" << "\n";
-      // utils::Log{} << "Reduce Wait Time: " << ReduceTime / 1e6 << "s" << "\n";
+      utils::Log{} << "Work Distribution Time: " << vertexDistributionTime / 1e6 << "s" << "\n";
+      utils::Log{} << "Reduce Wait Time: " << reduceTime / 1e6 << "s" << "\n";
       patternProcessingTime += (total_time2 - total_time1);
       utils::Log{} << "Processing Time: " << patternProcessingTime / 1e6 << "s"<< "\n";
       // utils::Log{} << "DONE patterns finished after: " << total_time /1e6 << "s" << "\n";
