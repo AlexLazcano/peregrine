@@ -139,11 +139,12 @@ namespace Peregrine
       std::optional<Range> firstRange = Context::rQueue->popRange();
       if (!firstRange.has_value())
       {
-        if (Context::rQueue->done_stealing && Context::rQueue->isQueueEmpty())
+        // FIXME: Finishing logic might need revising, Sometimes, there are counts missing from sum. 
+        if (Context::rQueue->done_stealing && Context::rQueue->noMoreActive())
         {
           break;
         }
-
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         continue;
       }
 
@@ -1321,6 +1322,7 @@ namespace Peregrine
           // std::this_thread::sleep_for(std::chrono::seconds(1));
           // printf("MASTER WAITING\n");
           // rq.showActive();
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         // printf("MASTER %d Recv DONE\n", world_rank);
 
@@ -1413,13 +1415,15 @@ namespace Peregrine
         int hasRobber = Context::rQueue->checkRobbers();
         if (hasRobber)
         {
+          printf("Rank %d Has robbers\n", world_rank);
           Context::rQueue->handleRobbers();
         }
         if (Context::rQueue->done_ranges_given)
         {
           Context::rQueue->stealRangeAsync();
         }
-            }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
 
       // printf("Rank %d Recv DONE\n", world_rank);
 

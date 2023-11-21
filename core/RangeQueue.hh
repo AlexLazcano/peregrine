@@ -105,12 +105,17 @@ namespace Peregrine
         void printRecv();
         bool waitAllSends();
         bool getDoneRequesting();
+        bool noMoreActive();
         void setDoneRequesting(bool b);
     };
 
     int RangeQueue::get_rank()
     {
         return world_rank;
+    }
+    bool RangeQueue::noMoreActive()
+    {
+        return activeProcesses.size() == 0;
     }
     bool RangeQueue::getDoneRequesting()
     {
@@ -399,6 +404,12 @@ namespace Peregrine
         MPI_Request request;
         MPI_Status status;
         auto lowestRank = findLowest(activeProcesses, world_rank);
+
+        if (lowestRank == -1)
+        {
+            return false;
+        }
+        
         // printf("Rank %d attemting stealing from %d\n", world_rank, lowestRank);
         MPI_Isend(&buffer, 1, MPI_UINT64_T, lowestRank, MPI_STEAL_CHANNEL, MPI_COMM_WORLD, &request);
 
