@@ -190,6 +190,7 @@ namespace Peregrine
                 // MPI_Barrier(MPI_COMM_WORLD);
             }
         }
+        done_requesting = true;
     }
     std::vector<uint64_t> RangeQueue::splitRangeForScatter(Range range)
     {
