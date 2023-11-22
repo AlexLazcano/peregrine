@@ -65,6 +65,7 @@ namespace Peregrine
     std::atomic<uint64_t> task_ctr(0);
     std::atomic<uint64_t> gcount(0);
     std::shared_ptr<Peregrine::RangeQueue> rQueue;
+    bool exited = true;
     // Peregrine::RangeQueue rQueue;
   }
 
@@ -137,15 +138,20 @@ namespace Peregrine
     while (true)
     {
       std::optional<Range> firstRange = Context::rQueue->popRange();
-      // std::this_thread::sleep_for(std::chrono::milliseconds(Context::rQueue->get_rank()*250));
+
+      // std::this_thread::sleep_for(std::chrono::milliseconds((Context::rQueue->get_rank()+1) * 10));
       if (!firstRange.has_value())
       {
-        // FIXME: Finishing logic might need revising, Sometimes, there are counts missing from sum. 
-        if (Context::rQueue->done_stealing && Context::rQueue->noMoreActive())
+        //  printf("%d in loop\n",1);
+        // FIXME: Finishing logic might need revising, Sometimes, there are counts missing from sum.
+        if (Context::exited)
         {
+          printf("thread exited\n");
           break;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // Context::rQueue->showActive();
+        // std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        // printf("thread stuck\n");
         continue;
       }
 
@@ -1404,6 +1410,7 @@ namespace Peregrine
       Context::rQueue->resetVector();
       if (world_size > 1)
       {
+        Context::exited = false;
         Context::rQueue->openSignal();
         Context::rQueue->initRobbers();
       }
@@ -1418,38 +1425,93 @@ namespace Peregrine
       Context::rQueue->coordinateScatter(Range(0, num_tasks + 1));
       auto dist_time2 = utils::get_timestamp();
       vertexDistributionTime += (dist_time2 - dist_time1);
-      // Context::rQueue->printRanges();
+      Context::rQueue->showActive();
       // begin matching
+      Context::exited = false;
       barrier.release();
       if (world_size > 1)
       {
         bool processesAreDone = false;
+        int hasRobber;
+        bool stealingInProgress = false; // Add this variable
+        bool receivedStolen = false;
+
         while (true)
         {
-          processesAreDone = Context::rQueue->handleSignal();
-          if (processesAreDone)
-          {
-            Context::rQueue->done_stealing = true;
-            break;
-          }
-          int hasRobber = Context::rQueue->checkRobbers();
+          // Check and handle signals
+          // processesAreDone = Context::rQueue->handleSignal();
+          Context::rQueue->handleSignal();
+
+          // Check for robbers
+          hasRobber = Context::rQueue->checkRobbers();
+
+          // If there are robbers, handle them asynchronously
           if (hasRobber)
           {
-            // printf("Rank %d Has robbers\n", world_rank);
-            Context::rQueue->handleRobbers();
+            printf("Rank %d has robber\n", world_rank);
+            bool success = Context::rQueue->handleRobbersAsync();
+            if (success)
+            {
+              printf("%d stuck in success\n", world_rank);
+
+              Context::rQueue->initRobbers();
+            }
           }
+          if (Context::rQueue->noMoreActive())
+          {
+            printf("%d stuck in no active \n", world_rank);
+
+            break;
+          }
+
+          if (stealingInProgress)
+          {
+            // printf("Stealing in progress: %d\n", world_rank);
+            receivedStolen = Context::rQueue->recvStolenAsync();
+            if (!receivedStolen)
+            {
+              // printf("Rank %d did not recieve \n", world_rank);
+              // Context::rQueue->showActive();
+              // std::this_thread::sleep_for(std::chrono::milliseconds(300));
+               continue;
+            }
+            else
+            {
+              // stealingInProgress = Context::rQueue->stealRangeAsync();
+             
+              printf("%d received\n", world_rank);
+            }
+          }
+
           if (Context::rQueue->done_ranges_given)
           {
-            Context::rQueue->stealRangeAsync();
+            stealingInProgress = Context::rQueue->stealRangeAsync();
+
+            if (stealingInProgress)
+            {
+              // printf("rank %d  stealing in progress\n", world_rank);
+
+              continue;
+            }
+
+            // Perform actions after stealing is done
+
+            // break;
           }
-          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+          // printf("%d stuck bottom\n", world_rank);
+          // Context::rQueue->showActive();
+          // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
+        Context::rQueue->signalDone();
+        Context::exited = true;
+        Context::rQueue->showActive();
+        printf("Rank %d exited\n", world_rank);
       }
       else
       {
       }
 
-      // // printf("Rank %d Recv DONE\n", world_rank);
+      printf("Rank %d Recv DONE\n", world_rank);
 
       // // sleep until matching finished
       barrier.join();
@@ -1458,6 +1520,7 @@ namespace Peregrine
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
       auto t1 = utils::get_timestamp();
+      printf("Reached barrier%d\n", world_rank);
       MPI_Barrier(MPI_COMM_WORLD);
       auto t2 = utils::get_timestamp();
       node_wait_time += (t2-t1);

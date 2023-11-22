@@ -23,13 +23,12 @@ int main(int argc, char const *argv[])
         while (true)
         {
             auto maybeRange = rq.popRange();
-            std::this_thread::sleep_for(std::chrono::milliseconds((world_rank+1)*50));
-            
+            std::this_thread::sleep_for(std::chrono::milliseconds((world_rank + 1) * 250));
 
             if (!maybeRange.has_value())
             {
 
-                if (rq.done_stealing && rq.noMoreActive())
+                if (rq.done_stealing)
                 {
                     break;
                 }
@@ -58,16 +57,19 @@ int main(int argc, char const *argv[])
     while (true)
     {
         bool allProcessesDone = rq.handleSignal();
-        if (allProcessesDone)
-        {
-            rq.done_stealing = true;
-            break;
-        }
         int hasRobber = rq.checkRobbers();
         if (hasRobber)
         {
             // printf("Rank %d has robber\n", world_rank);
-            bool gotRobbed = rq.handleRobbers();
+            bool gotRobbed = rq.handleRobbersAsync();
+        }
+        else
+        {
+            if (allProcessesDone)
+            {
+                rq.done_stealing = true;
+                break;
+            }
         }
 
         if (rq.done_ranges_given)
@@ -86,6 +88,10 @@ int main(int argc, char const *argv[])
     printf("Rank %d waiting for thread\n", world_rank);
     th.join();
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    
+    // rq.printRanges();
+
     double count = 0.0;
     for (auto const &[first, second] : work_done)
     {
@@ -94,7 +100,6 @@ int main(int argc, char const *argv[])
     }
 
     double percent = count / (num_chunks * world_size);
-
     MPI_Barrier(MPI_COMM_WORLD);
     printf("Work done by %d process: %.1f / %d = %.1f%\n", world_rank, count, num_chunks * world_size, percent * 100);
 
