@@ -1412,6 +1412,13 @@ namespace Peregrine
       else
       {
       }
+      
+      while (!Context::rQueue->done_ranges_given)
+      {
+        /* code */
+      }
+      Context::exited = true;
+      printf("Rank %d exited\n", world_rank);
 
       // printf("Rank %d Recv DONE\n", world_rank);
 
