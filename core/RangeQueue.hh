@@ -83,7 +83,9 @@ namespace Peregrine
         int waiting_rank;
 
     public:
-        std::atomic<bool> done_ranges_given = false;
+        std::mutex doneMutex;
+        std::condition_variable done_cv;
+        bool done_ranges_given = false;
         bool done_stealing = false;
         int get_rank();
         RangeQueue(int world_rank, int world_size, uint32_t nworkers);
@@ -92,6 +94,7 @@ namespace Peregrine
         bool fetchWorker();
         std::optional<Range> popRange();
         void resetVector();
+        void clearActive();
         void printRanges();
         bool stealRange();
         bool stealRangeAsync();
@@ -122,6 +125,13 @@ namespace Peregrine
         std::vector<uint64_t> splitRangeForScatter(Range range);
     };
 
+    void RangeQueue::clearActive() {
+        if (activeProcesses.size() == 1)
+        {
+            findAndRemoveElement(activeProcesses, world_rank);
+        }
+        
+    }
     void RangeQueue::coordinateScatter(Range range)
     {
         uint split = world_size;
@@ -494,7 +504,7 @@ namespace Peregrine
         MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
         if (flag && activeProcesses.size() == 1)
         {
-            printf("RANK %d ALL DONE\n", world_rank);
+            // printf("RANK %d ALL DONE\n", world_rank);
             return true;
         }
         // printf("Not done%d \n", world_rank);
@@ -554,21 +564,19 @@ namespace Peregrine
             // printf("%d popped %ld %ld\n", world_rank, value.first, value.second);
             return value;
         }
-        if (!done_ranges_given.load(std::memory_order_acquire))
-        {
+        // if (!done_ranges_given.load(std::memory_order_acquire))
+        // {
             // Try to set the flag; if it was already set, another thread has entered the block
             if (!done_ranges_given_flag.test_and_set(std::memory_order_acquire))
             {
                 // This thread successfully set the flag; execute the block
-                printf("Rank %d done ranges\n", world_rank);
-             
-                // findAndRemoveElement(activeProcesses, world_rank);
-                // showActive();
+                // printf("Rank %d done ranges\n", world_rank);
                 done_ranges_given = true;
-                // done_ranges_given_flag.clear(std::memory_order_release); // Release the flag
+                done_cv.notify_all();
+              
             }
             // If the flag was already set, another thread has already executed the block, so skip it
-        }
+        // }
 
         return std::nullopt;
     }
@@ -603,7 +611,7 @@ namespace Peregrine
         concurrent_range_queue.clear();
         // To reset (clear) the flag:
         done_ranges_given_flag.clear(std::memory_order_release);
-        printf("reset %d\n", world_rank);
+        // printf("reset %d\n", world_rank);
     }
 
     inline void RangeQueue::printRanges()

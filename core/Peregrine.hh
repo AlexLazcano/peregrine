@@ -146,7 +146,7 @@ namespace Peregrine
         // FIXME: Finishing logic might need revising, Sometimes, there are counts missing from sum.
         if (Context::exited)
         {
-          printf("thread exited\n");
+          // printf("thread exited\n");
           break;
         }
         // Context::rQueue->showActive();
@@ -1335,7 +1335,9 @@ namespace Peregrine
       Context::rQueue->coordinateScatter(Range(0, num_tasks + 1));
       auto dist_time2 = utils::get_timestamp();
       vertexDistributionTime += (dist_time2 - dist_time1);
-      Context::rQueue->showActive();
+      
+     
+
       // begin matching
       Context::exited = false;
       barrier.release();
@@ -1344,7 +1346,7 @@ namespace Peregrine
         bool processesAreDone = false;
         int hasRobber;
         bool canSteal = false; // Add this variable
-        bool receivedStolen = false;
+        
 
         while (true)
         {
@@ -1371,17 +1373,15 @@ namespace Peregrine
             size_t processesLeft = Context::rQueue->getActiveProcesses();
             if (processesLeft == 1)
             {
-              printf("Rank %d has 1 left\n", world_rank);
+              // printf("Rank %d has 1 left\n", world_rank);
               while (true)
               {
                 Context::rQueue->signalDone();
                 processesAreDone = Context::rQueue->handleSignal();
                 if (processesAreDone)
                 {
-
                   break;
                 }
-                // Context::rQueue->showActive();
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
               }
 
@@ -1405,20 +1405,27 @@ namespace Peregrine
           }
         }
         // Context::rQueue->signalDone();
-        Context::exited = true;
-        Context::rQueue->showActive();
-        printf("Rank %d exited\n", world_rank);
       }
       else
       {
       }
-      
-      while (!Context::rQueue->done_ranges_given)
+
+      // while (!Context::rQueue->done_ranges_given) // Change to conditional variable
+      // {
+      //   std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      // }
+      // In the thread where you are waiting:
       {
-        /* code */
+        std::unique_lock<std::mutex> lock(Context::rQueue->doneMutex);
+        Context::rQueue->done_cv.wait(lock, [&]()
+                                 { return Context::rQueue->done_ranges_given; });
       }
+
       Context::exited = true;
-      printf("Rank %d exited\n", world_rank);
+      // printf("Rank %d exited\n", world_rank);
+      Context::rQueue->clearActive();
+      // Context::rQueue->showActive();
+
 
       // printf("Rank %d Recv DONE\n", world_rank);
 
@@ -1429,7 +1436,7 @@ namespace Peregrine
       uint64_t global_count = Context::gcount;
       results.emplace_back(p, global_count);
       auto t1 = utils::get_timestamp();
-      printf("Reached barrier%d\n", world_rank);
+      // printf("Reached barrier%d\n", world_rank);
       MPI_Barrier(MPI_COMM_WORLD);
       auto t2 = utils::get_timestamp();
       node_wait_time += (t2-t1);
