@@ -3,7 +3,7 @@
 # Generate a bash script with multiple Slurm job submissions
 
 # Specify the output script file
-directory="countMPI"
+directory="original"
 
 if [ ! -d "$directory" ]; then
     mkdir "$directory"
@@ -33,7 +33,7 @@ generate_job_command() {
 #SBATCH --partition=$partition
 #SBATCH --ntasks=$n_tasks
 #SBATCH --output=$motif_type.$n_tasks.$cpus_per_task.$partition.txt \n
-srun  /home/alazcano/peregrine/bin/countMPI $data_dir $motif_type $cpus_per_task
+srun  /home/alazcano/master/bin/count $data_dir $motif_type $cpus_per_task
 "
 
 }
@@ -44,9 +44,9 @@ pattern=("5-motifs" "6-motifs")
 total_cpus=(1 2 4 8)
 partitions=("slow" "fast")
 # cpus_per_task=1
-time_limit="03:30"
+time_limit="01:30"
 mem_limit="5G"
-n_tasks_values=(1 2 4)
+n_tasks_values=(1)
 
 
 # Generate the script content

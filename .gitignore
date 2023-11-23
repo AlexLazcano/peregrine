@@ -8,3 +8,5 @@ data/*
 *.png
 .vscode
 slurm/auto/countMPI
+slurm/auto/original
+slurm/results
