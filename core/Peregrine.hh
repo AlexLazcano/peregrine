@@ -1342,39 +1342,44 @@ namespace Peregrine
       std::cout << "Rank " << world_rank << " working: " << p << "\n";
       // Context::rQueue->showActive();
       int numberOfProcesses = Context::rQueue->getActiveProcesses();
-      printf("rank %d number of processes\n", numberOfProcesses);
+      printf("rank %d number of processes: %d \n", world_rank, numberOfProcesses);
       // begin matching
-      Context::exited = false;
       barrier.release();
       if (world_size > 1)
       {
-        // Add this variable
-        // bool isDone_waiting = false;
-
+        bool set = false;
         while (true)
         {
-          printf("rank %d in main loop\n", world_rank);
-
-
+          // printf("rank %d in main loop\n", world_rank);
+          auto l1_time = utils::get_timestamp();
           if (Context::rQueue->done_ranges_given)
           {
-            printf("rank %d in done loop\n", world_rank);
+            // printf("rank %d in done loop\n", world_rank);
+            // Context::rQueue->stealRangeAsync();
+            // Context::rQueue->checkRobbers();
+            // Context::rQueue->handleRobbersAsync();
+            // Context::rQueue->recvStolenAsync();
+            // Context::rQueue->initRobbers();
+            Context::rQueue->handleSignal();
+            if (!set)
+            {
+              Context::rQueue->signalDone();
+              set = true;
+            }
 
             size_t processesLeft = Context::rQueue->getActiveProcesses();
 
             if (processesLeft == 1)
             {
+
               printf("Rank %d has 1 left\n", world_rank);
               printf("%d break looop\n", world_rank);
-              break;
-
-              auto l1_time = utils::get_timestamp();
-
               auto l2_time = utils::get_timestamp();
               node_loop_time += (l2_time-l1_time);
               break;
             }
           }
+          std::this_thread::sleep_for(std::chrono::milliseconds(25));
         }
       }
       else

@@ -81,6 +81,7 @@ namespace Peregrine
         MPI_Status stealing_status;
         bool done_requesting = false;
         bool robber_recv_waiting = false;
+        bool robber_recv_delivered = false;
         bool stealing_recv_waiting = false;
         int waiting_rank;
 
@@ -447,7 +448,7 @@ namespace Peregrine
             {
                 int signal = this->world_rank;
                 MPI_Isend(&signal, 1, MPI_INT, dest, MPI_DONE_CHANNEL, MPI_COMM_WORLD, &send_reqs[i]);
-                // printf("RANK %d send %d in i: %d - %d \n", world_rank, dest, i, send_reqs[i]);
+                printf("RANK %d send %d in i: %d - %d \n", world_rank, dest, i, send_reqs[i]);
                 i++;
             }
         }
@@ -480,10 +481,9 @@ namespace Peregrine
                 int flag = 0;
                 // printf("RANK %d recv %d in i: %i\n", world_rank, src, i);
                 MPI_Test(&recv_reqs[i], &flag, MPI_STATUS_IGNORE);
-
                 if (flag)
                 {
-                    // printf("RANK %d completed: %d\n", world_rank, signals[i]);
+                    printf("RANK %d completed: %d\n", world_rank, signals[i]);
                     // printf("Rank %d sending 1 to %d\n", world_rank, source);
                     bool res = findAndRemoveElement(activeProcesses, signals[i]);
                     if (res)
@@ -497,9 +497,9 @@ namespace Peregrine
 
         int flag = 0;
         MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
-        if (activeProcesses.size() == 1)
+        if (flag)
         {
-            // printf("RANK %d ALL DONE\n", world_rank);
+            printf("RANK %d ALL DONE\n", world_rank);
             return true;
         }
         // printf("Not done%d \n", world_rank);
@@ -559,7 +559,6 @@ namespace Peregrine
     {
         this->done_requesting = false;
         this->done_ranges_given = false;
-        this->robber_recv_waiting = false;
         this->stealing_recv_waiting = false;
         robber_req = MPI_REQUEST_NULL;
         stolen_req = MPI_REQUEST_NULL;
@@ -595,37 +594,17 @@ namespace Peregrine
         }
     }
 
-    bool Peregrine::RangeQueue::stealRange()
-    {
-        // uint64_t buffer[2];
-        // MPI_Status status;
-
-        // if (activeProcesses.size() == 0)
-        // {
-        //     return true;
-        // }
-        // int rank = world_rank;
-        // for (const auto &activeRank : activeProcesses)
-        // {
-        //     if (activeRank == world_rank) // || activeRank == 0)
-        //     {
-        //         continue;
-        //     }
-
-        //     printf("RANK %d stealing from %d\n", world_rank, activeRank);
-        //     MPI_Send(&rank, 1, MPI_UINT64_T, activeRank, MPI_STEAL_CHANNEL, MPI_COMM_WORLD);
-        //     recvStolen(buffer, activeRank, &status);
-        // }
-        return false;
-    }
+    
 
     bool RangeQueue::stealRangeAsync()
     {
+        // printf("rank %d in async\n", world_rank);
+        
         auto lowestRank = findLowest(activeProcesses, world_rank);
 
         if (lowestRank == -1)
         {
-            // printf("Rank %d No more steal\n", world_rank);
+            printf("Rank %d No more steal\n", world_rank);
             // Context::exited = true;
             return true; // Cannot steal if there's no valid target
         }
@@ -635,21 +614,15 @@ namespace Peregrine
             int send = world_rank;
             MPI_Request request;
 
-            // printf("Rank %d attempting stealing from rank: %d - sending %d\n", world_rank, lowestRank, send);
+            printf("Rank %d attempting stealing from rank: %d - sending %d\n", world_rank, lowestRank, send);
             MPI_Isend(&send, 1, MPI_INT, lowestRank, MPI_STEAL_CHANNEL, MPI_COMM_WORLD, &request);
             waiting_rank = lowestRank;
             // printf("Rank %d sending stealing from rank: %d - sending %d\n", world_rank, lowestRank, send);
-
-            // MPI_Wait(&request, MPI_STATUS_IGNORE);
-            // printf("Rank %d sent stealing from waiting rank: %d\n", world_rank, waiting_rank);
-
-            // Note: It's common to check for errors here, but that depends on your application's requirements
-            // std::this_thread::sleep_for(std::chrono::milliseconds(100));
             
             stealing_recv_waiting = true;
             return false; // Successfully initiated stealing
         }
-
+        // printf("rank %d stealing in progres\n", world_rank);
         return false; // Stealing is already in progress
     }
 
@@ -659,35 +632,36 @@ namespace Peregrine
         int count;
         int flag = 0;
         uint64_t buffer[2] = {0, 0};
+        MPI_Status status;
         // printf("Rank %d probing for %d \n", world_rank, waiting_rank);
-        MPI_Iprobe(MPI_ANY_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, &flag, &stealing_status);
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, &flag, &status);
 
         if (flag)
         {
 
-            MPI_Get_count(&stealing_status, MPI_UINT64_T, &count);
+            MPI_Get_count(&status, MPI_UINT64_T, &count);
 
             if (count == 1)
             {
                 // Tag 6 - Returns false since could not get any more ranges
-                MPI_Recv(buffer, 1, MPI_UINT64_T, stealing_status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                // printf("Rank %d couldnt steal from %d \n", world_rank, stealing_status.MPI_SOURCE);
+                MPI_Recv(buffer, 1, MPI_UINT64_T, status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                printf("Rank %d couldnt steal from %d \n", world_rank, status.MPI_SOURCE);
 
-                bool res = findAndRemoveElement(activeProcesses, stealing_status.MPI_SOURCE);
+                bool res = findAndRemoveElement(activeProcesses, status.MPI_SOURCE);
                 if (res)
                 {
-                    printf("Rank %d removed recvStolenAsync %d \n", world_rank, stealing_status.MPI_SOURCE);
+                    printf("Rank %d removed recvStolenAsync %d \n", world_rank, status.MPI_SOURCE);
                 }
                 else
                 {
-                    printf("Rank %d already recvStolenAsync %d \n", world_rank, stealing_status.MPI_SOURCE);
+                    printf("Rank %d already recvStolenAsync %d \n", world_rank, status.MPI_SOURCE);
                 }
             }
             else
             {
                 // Tag 6 - Got more ranges
-                MPI_Recv(buffer, 2, MPI_UINT64_T, stealing_status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                // printf("RANK %d stole (%ld %ld) from: %d \n", world_rank, buffer[0], buffer[1], stealing_status.MPI_SOURCE);
+                MPI_Recv(buffer, 2, MPI_UINT64_T, status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                printf("RANK %d stole (%ld %ld) from: %d \n", world_rank, buffer[0], buffer[1], stealing_status.MPI_SOURCE);
 
                 this->addRange(Range(buffer[0], buffer[1]));
             }
@@ -737,7 +711,7 @@ namespace Peregrine
 
     bool RangeQueue::checkRobbers()
     {
-        if (robber_recv_waiting) // if waiting for reponse check
+        if (robber_recv_waiting && !robber_recv_delivered) // if waiting for reponse check
         {
             // printf("in check %d \n", world_rank);
             int flag = 0;
@@ -746,10 +720,9 @@ namespace Peregrine
             MPI_Test(&robber_req, &flag, MPI_STATUS_IGNORE);
             if (flag)
             {
-
-                robber_recv_waiting = false; // message received, dont need to wait
-                // MPI_Wait(&robber_req, &status);
-
+                printf("rank %d has message \n", world_rank);
+                // robber_recv_waiting = false; // message received, dont need to wait
+                robber_recv_delivered = true;
                 return true;
             }
             // std::this_thread::sleep_for(std::chrono::milliseconds(150));
@@ -763,62 +736,41 @@ namespace Peregrine
 
     bool RangeQueue::handleRobbersAsync()
     {
-        if (!robber_recv_waiting) // if robber is not waiting then there is a message
+        if (!robber_recv_waiting || !robber_recv_delivered) 
         {
-            // bool send_success = checkRobbers
-            int source = robber_buffer;
-            // printf("Rank %d source: %d\n", world_rank, source);
-            auto maybeRange = this->popRange();
-            uint64_t buffer[2] = {0, 0};
-            if (!maybeRange.has_value())
-            {
-                // printf("Rank %d sending 1 to %d\n", world_rank, source);
-                bool res = findAndRemoveElement(activeProcesses, source);
-                if (res)
-                {
-                    printf("Rank %d removed %d handleRobbersAsync\n", world_rank, source);
-                }
-
-                MPI_Isend(buffer, 1, MPI_UINT64_T, source, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, &stolen_send_req);
-
-                return true;
-            }
-
-            auto range = maybeRange.value();
-            buffer[0] = range.first;
-            buffer[1] = range.second;
-
-            // printf("RANK %d sending to %d : (%ld %ld) \n", world_rank, source, buffer[0], buffer[1]);
-            MPI_Isend(buffer, 2, MPI_UINT64_T, source, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, &stolen_send_req);
-            return true;
+            return false;
         }
-        // return true if it sent a message back, false if its waiting 
-        return false;
-    }
-
-    bool RangeQueue::handleRobbers()
-    {
-
+            // bool send_success = checkRobbers
+        int source = robber_buffer;
+        // printf("Rank %d source: %d\n", world_rank, source);
         auto maybeRange = this->popRange();
         uint64_t buffer[2] = {0, 0};
         if (!maybeRange.has_value())
         {
-            // printf("Rank %d sending 1\n", world_rank);
-            MPI_Send(buffer, 1, MPI_UINT64_T, robber_status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD);
-            initRobbers();
-            return false;
+            printf("Rank %d sending 1 to %d\n", world_rank, source);
+            bool res = findAndRemoveElement(activeProcesses, source);
+            if (res)
+            {
+                // printf("Rank %d removed %d handleRobbersAsync\n", world_rank, source);
+            }
+
+            MPI_Isend(buffer, 1, MPI_UINT64_T, source, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, &stolen_send_req);
+            robber_recv_delivered = false;
+            robber_recv_waiting = false;
+            return true;
         }
 
         auto range = maybeRange.value();
         buffer[0] = range.first;
         buffer[1] = range.second;
 
-        // printf("RANK %d sending to %d : (%ld %ld) \n", world_rank, robber_status.MPI_SOURCE, buffer[0], buffer[1]);
-        MPI_Send(buffer, 2, MPI_UINT64_T, robber_status.MPI_SOURCE, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD);
-        initRobbers();
-
+        printf("RANK %d sending to %d : (%ld %ld) \n", world_rank, source, buffer[0], buffer[1]);
+        MPI_Isend(buffer, 2, MPI_UINT64_T, source, MPI_STOLEN_CHANNEL, MPI_COMM_WORLD, &stolen_send_req);
+        robber_recv_delivered = false;
+        robber_recv_waiting = false;
         return true;
     }
+
     inline bool RangeQueue::isQueueEmpty()
     {
         return this->concurrent_range_queue.empty();
@@ -842,7 +794,7 @@ namespace Peregrine
         stolen_send_req = MPI_REQUEST_NULL;
         this->send_reqs.resize(world_size - 1, MPI_REQUEST_NULL);
         this->recv_reqs.resize(world_size - 1, MPI_REQUEST_NULL);
-        this->signals.resize(world_size);
+        this->signals.resize(world_size, -1);
     }
 
     RangeQueue::~RangeQueue()
