@@ -451,8 +451,6 @@ namespace Peregrine
                 i++;
             }
         }
-        // printf("%d here in siganl\n", world_rank);
-        // findAndRemoveElement(this->activeProcesses, this->world_rank);
 
     }
 
@@ -508,28 +506,7 @@ namespace Peregrine
         return false;
     }
 
-    // void RangeQueue::showWork()
-    // {
-    //     double count = 0.0;
-
-    //     // for (auto const &[first, second] : work_range)
-    //     // {
-    //     //     count += 1.0;
-    //     //     printf("Rank %d: %ld %ld \n", world_rank, first, second);
-    //     // }
-    //     double sum;
-
-    //     // MPI_Allreduce(&count, &sum, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-    //     // if (world_rank == 0)
-    //     // {
-    //     //     return;
-    //     // }
-
-    //     // double percent = count / (sum * world_size);
-
-    //     // MPI_Barrier(MPI_COMM_WORLD);
-    //     // printf("Work done by each process: %.1f / %.0f = %.1f  \n", count, sum * world_size, percent * 100);
-    // }
+    
     inline void RangeQueue::showActive()
     {
         printf("RANK: %d Active size: %ld\n", world_rank, activeProcesses.size());
@@ -598,17 +575,13 @@ namespace Peregrine
 
         for (int i = 0; i < this->world_size; i++)
         {
-            // if (i == world_rank)
-            // {
-            //     continue;
-            // }
 
             this->activeProcesses.emplace_back(i);
         }
         concurrent_range_queue.clear();
         // To reset (clear) the flag:
         done_ranges_given_flag.clear(std::memory_order_release);
-        // printf("reset %d\n", world_rank);
+        printf("reset %d\n", world_rank);
     }
 
     inline void RangeQueue::printRanges()
@@ -855,15 +828,15 @@ namespace Peregrine
         this->world_rank = world_rank;
         this->world_size = world_size;
         this->nWorkers = nworkers;
-        // for (int i = 0; i < this->world_size; i++)
-        // {
-        //     // if (i == world_rank)
-        //     // {
-        //     //     continue;
-        //     // }
+        for (int i = 0; i < this->world_size; i++)
+        {
+            // if (i == world_rank)
+            // {
+            //     continue;
+            // }
 
-        //     this->activeProcesses.emplace_back(i);
-        // }
+            this->activeProcesses.emplace_back(i);
+        }
         robber_req = MPI_REQUEST_NULL;
         stolen_req = MPI_REQUEST_NULL;
         stolen_send_req = MPI_REQUEST_NULL;
