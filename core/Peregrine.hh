@@ -1355,12 +1355,12 @@ namespace Peregrine
           if (Context::rQueue->done_ranges_given)
           {
             // printf("rank %d in done loop\n", world_rank);
-            // Context::rQueue->stealRangeAsync();
-            // Context::rQueue->checkRobbers();
-            // Context::rQueue->handleRobbersAsync();
-            // Context::rQueue->recvStolenAsync();
-            // Context::rQueue->initRobbers();
-            Context::rQueue->handleSignal();
+            Context::rQueue->stealRangeAsync();
+            Context::rQueue->checkRobbers();
+            Context::rQueue->handleRobbersAsync();
+            Context::rQueue->recvStolenAsync();
+            Context::rQueue->initRobbers();
+            bool allDone = Context::rQueue->handleSignal();
             if (!set)
             {
               Context::rQueue->signalDone();
@@ -1368,8 +1368,9 @@ namespace Peregrine
             }
 
             size_t processesLeft = Context::rQueue->getActiveProcesses();
+            printf("rank: %d alldone %d | processes left %ld \n",world_rank, allDone, processesLeft);
 
-            if (processesLeft == 1)
+            if (processesLeft)
             {
 
               printf("Rank %d has 1 left\n", world_rank);
@@ -1385,18 +1386,6 @@ namespace Peregrine
       else
       {
       }
-
-      // while (!Context::rQueue->done_ranges_given) // Change to conditional variable
-      // {
-      //   printf("not done with ranges\n ", done_Ran)
-      //   std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      // }
-      // In the thread where you are waiting:
-      // {
-      //   std::unique_lock<std::mutex> lock(Context::rQueue->doneMutex);
-      //   Context::rQueue->done_cv.wait(lock, [&]()
-      //                            { return Context::rQueue->done_ranges_given; });
-      // }
 
       Context::exited = true;
       printf("Rank %d exited\n", world_rank);
