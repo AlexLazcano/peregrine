@@ -1347,7 +1347,7 @@ namespace Peregrine
       if (world_size > 1)
       {
         bool processesAreDone = false;
-        bool hasRobber = 0;
+        bool hasRobber = false;
         bool isDoneStealing = false; // Add this variable
         // bool isDone_waiting = false;
 
@@ -1360,18 +1360,10 @@ namespace Peregrine
 
           // Check for robbers
           hasRobber = Context::rQueue->checkRobbers();
-
-          if (hasRobber)
+          bool didReceive = Context::rQueue->handleRobbersAsync();
+          if (didReceive)
           {
-            // printf("has robber %d\n", world_rank);
-
-            Context::rQueue->handleRobbersAsync();
             Context::rQueue->initRobbers();
-          }
-          else
-          {
-            // printf("no robber %d\n", world_rank);
-            // std::this_thread::sleep_for(std::chrono::milliseconds(10));
           }
 
           if (Context::rQueue->done_ranges_given)
@@ -1385,7 +1377,7 @@ namespace Peregrine
 
             if (processesLeft == 1)
             {
-              // printf("Rank %d has 1 left\n", world_rank);
+              printf("Rank %d has 1 left\n", world_rank);
               Context::rQueue->signalDone();
               auto l1_time = utils::get_timestamp();
               bool isDone_waiting = false;
@@ -1397,11 +1389,9 @@ namespace Peregrine
                 processesAreDone = Context::rQueue->handleSignal();
                 // Check for robbers
                 hasRobber = Context::rQueue->checkRobbers();
-
-                if (hasRobber)
+                bool didReceive = Context::rQueue->handleRobbersAsync();
+                if (didReceive)
                 {
-                  // printf("has robber %d\n", world_rank);
-                  Context::rQueue->handleRobbersAsync();
                   Context::rQueue->initRobbers();
                 }
                 // {
