@@ -66,7 +66,7 @@ namespace Peregrine
     std::atomic<uint64_t> gcount(0);
     std::shared_ptr<Peregrine::RangeQueue> rQueue;
     bool exited = true;
-    // Peregrine::RangeQueue rQueue;
+    std::mutex mtx;
   }
 
   struct flag_t { bool on, working; };
@@ -141,19 +141,20 @@ namespace Peregrine
     {
       std::optional<Range> firstRange = Context::rQueue->popRange();
 
-      // std::this_thread::sleep_for(std::chrono::milliseconds((Context::rQueue->get_rank() + 1) * 50));
       if (!firstRange.has_value())
       {
-        //  printf("%d in loop\n",1);
-        // FIXME: Finishing logic might need revising, Sometimes, there are counts missing from sum.
-        if (Context::exited)
         {
-          // printf("thread exited\n");
-          break;
+          std::unique_lock<std::mutex> lock(Context::rQueue->doneMutex);
+          Context::rQueue->done_cv.wait(lock, []
+                                        { return Context::exited || !Context::rQueue->isQueueEmpty(); });
+          printf("notified\n");
+
+          if (Context::exited)
+          {
+            break;
+          }
         }
-        // Context::rQueue->showActive();
-        // std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        // printf("thread stuck\n");
+
         continue;
       }
 
@@ -1354,7 +1355,7 @@ namespace Peregrine
         while (true)
         {
           // printf("rank %d in main loop\n", world_rank);
-          Context::rQueue->checkRobbers();
+          bool isWaiting = Context::rQueue->checkRobbers();
           Context::rQueue->handleRobbersAsync();
           initiatedRecv = Context::rQueue->initRobbers();
           if (Context::rQueue->done_ranges_given)
@@ -1374,7 +1375,7 @@ namespace Peregrine
             // size_t processesLeft = Context::rQueue->getActiveProcesses();
             // printf("rank: %d alldone %d | processes left %ld \n",world_rank, allDone, processesLeft);
 
-            if (allDone && !initiatedRecv )
+            if (allDone && !isWaiting)
             {
 
               // printf("Rank %d has 1 left\n", world_rank);
@@ -1393,6 +1394,15 @@ namespace Peregrine
 
       Context::exited = true;
       // printf("Rank %d exited\n", world_rank);
+      Context::rQueue->done_cv.notify_all();
+      printf("Rank %d exited and notified all\n", world_rank);
+      // bool empty = Context::rQueue->isQueueEmpty();
+      // if (!empty)
+      // {
+      //   printf("Not empty\n", empty);
+      // }
+      
+      
       Context::rQueue->clearActive();
 
       // printf("Rank %d Recv DONE\n", world_rank);
