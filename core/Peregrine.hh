@@ -1339,7 +1339,7 @@ namespace Peregrine
       Context::rQueue->coordinateScatter(Range(0, num_tasks + 1));
       auto dist_time2 = utils::get_timestamp();
       vertexDistributionTime += (dist_time2 - dist_time1);
-      // std::cout << "Rank " << world_rank << " working: " << p << "\n";
+      std::cout << "Rank " << world_rank << " working: " << p << "\n";
       // Context::rQueue->showActive();
       // begin matching
       Context::exited = false;
@@ -1371,8 +1371,8 @@ namespace Peregrine
           else
           {
             // printf("no robber %d\n", world_rank);
+            // std::this_thread::sleep_for(std::chrono::milliseconds(10));
           }
-          // std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
           if (Context::rQueue->done_ranges_given)
           {
@@ -1380,9 +1380,9 @@ namespace Peregrine
             Context::rQueue->stealRangeAsync();
             Context::rQueue->recvStolenAsync();
             size_t processesLeft = Context::rQueue->getActiveProcesses();
-            // printf("Rank %d active processes: %ld\n",world_rank, processesLeft);
+            // printf("Rank %d active processes: %ld\n", world_rank, processesLeft);
             // Context::rQueue->showActive();
-            
+
             if (processesLeft == 1)
             {
               // printf("Rank %d has 1 left\n", world_rank);
@@ -1402,24 +1402,25 @@ namespace Peregrine
                 {
                   // printf("has robber %d\n", world_rank);
                   Context::rQueue->handleRobbersAsync();
+                  Context::rQueue->initRobbers();
                 }
-                // if (processesAreDone)
                 // {
-                //   printf("%d is processes are done\n", world_rank);
-                // }
-                // else
-                // {
-                //   printf("%d is processes are not done\n", world_rank);
-                // }
-                // if (isDoneStealing)
-                // {
-                //   printf("%d is done stealing\n", world_rank);
-                // }
-                // else
-                // {
-                //   printf("%d is not done stealing\n", world_rank);
-                // }
-
+                //   if (processesAreDone)
+                //   {
+                //     printf("%d is processes are done\n", world_rank);
+                //   }
+                //   else
+                //   {
+                //     printf("%d is processes are not done\n", world_rank);
+                //   }
+                //   if (isDoneStealing)
+                //   {
+                //     printf("%d is done stealing\n", world_rank);
+                //   }
+                //   else
+                //   {
+                //     printf("%d is not done stealing\n", world_rank);
+                //   }
                 // if (isDone_waiting)
                 // {
                 //   printf("%d is done waiting\n", world_rank);
@@ -1428,12 +1429,14 @@ namespace Peregrine
                 // {
                 //   printf("%d is not done waiting\n", world_rank);
                 // }
+                // }
+
                 if (isDoneStealing || processesAreDone)
                 {
                   // printf("%d break looop\n", world_rank);
                   break;
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                // std::this_thread::sleep_for(std::chrono::milliseconds(10));
               }
               auto l2_time = utils::get_timestamp();
               node_loop_time += (l2_time-l1_time);
@@ -1463,7 +1466,7 @@ namespace Peregrine
       // }
 
       Context::exited = true;
-      // printf("Rank %d exited\n", world_rank);
+      printf("Rank %d exited\n", world_rank);
       Context::rQueue->clearActive();
       // Context::rQueue->showActive();
 
