@@ -35,4 +35,4 @@ RUN make countMPI
 COPY getHosts.sh /peregrine/getHosts.sh
 RUN chmod +x /peregrine/getHosts.sh
 #This line keeps the container running 
-ENTRYPOINT ["/peregrine/getHosts.sh"]
+ENTRYPOINT ["tail", "-f", "/dev/null"]
