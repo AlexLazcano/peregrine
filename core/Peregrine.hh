@@ -1339,10 +1339,10 @@ namespace Peregrine
       Context::rQueue->coordinateScatter(Range(0, num_tasks + 1));
       auto dist_time2 = utils::get_timestamp();
       vertexDistributionTime += (dist_time2 - dist_time1);
-      std::cout << "Rank " << world_rank << " working: " << p << "\n";
+      // std::cout << "Rank " << world_rank << " working: " << p << "\n";
       // Context::rQueue->showActive();
-      int numberOfProcesses = Context::rQueue->getActiveProcesses();
-      printf("rank %d number of processes: %d \n", world_rank, numberOfProcesses);
+      // int numberOfProcesses = Context::rQueue->getActiveProcesses();
+      // printf("rank %d number of processes: %d \n", world_rank, numberOfProcesses);
       // begin matching
       barrier.release();
       if (world_size > 1)
@@ -1360,7 +1360,7 @@ namespace Peregrine
             Context::rQueue->handleRobbersAsync();
             Context::rQueue->recvStolenAsync();
             Context::rQueue->initRobbers();
-            bool allDone = Context::rQueue->handleSignal();
+            Context::rQueue->handleSignal();
             if (!set)
             {
               Context::rQueue->signalDone();
@@ -1368,13 +1368,13 @@ namespace Peregrine
             }
 
             size_t processesLeft = Context::rQueue->getActiveProcesses();
-            printf("rank: %d alldone %d | processes left %ld \n",world_rank, allDone, processesLeft);
+            // printf("rank: %d alldone %d | processes left %ld \n",world_rank, allDone, processesLeft);
 
             if (processesLeft)
             {
 
-              printf("Rank %d has 1 left\n", world_rank);
-              printf("%d break looop\n", world_rank);
+              // printf("Rank %d has 1 left\n", world_rank);
+              // printf("%d break looop\n", world_rank);
               auto l2_time = utils::get_timestamp();
               node_loop_time += (l2_time-l1_time);
               break;
@@ -1388,7 +1388,7 @@ namespace Peregrine
       }
 
       Context::exited = true;
-      printf("Rank %d exited\n", world_rank);
+      // printf("Rank %d exited\n", world_rank);
       Context::rQueue->clearActive();
       // Context::rQueue->showActive();
 

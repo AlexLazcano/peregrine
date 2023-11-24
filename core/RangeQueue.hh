@@ -24,13 +24,14 @@ bool findAndRemoveElement(std::vector<int> &processes, int rankToRemove)
 
 void cancelRequest(MPI_Request &req, int rank)
 {
+    (void) rank;
     int flag = 0;
     MPI_Status status;
     MPI_Test(&req, &flag, &status);
 
     if (!flag)
     {
-        printf("Rank %d canceling %d \n", rank, req);
+        // printf("Rank %d canceling %d \n", rank, req);
         MPI_Cancel(&req);
     }
 }
@@ -413,7 +414,7 @@ namespace Peregrine
         {
             if (src != world_rank)
             {
-                printf("RANK %d recv %d in i: %i\n", world_rank, src, i);
+                // printf("RANK %d recv %d in i: %i\n", world_rank, src, i);
                 MPI_Irecv(&signals[i], 1, MPI_INT, src, MPI_DONE_CHANNEL, MPI_COMM_WORLD, &recv_reqs[i]);
                 i++;
             }
@@ -465,12 +466,12 @@ namespace Peregrine
                 MPI_Test(&recv_reqs[i], &flag, MPI_STATUS_IGNORE);
                 if (flag)
                 {
-                    printf("RANK %d completed[i=%d]: %d\n", world_rank, i, signals[i]);
+                    // printf("RANK %d completed[i=%d]: %d\n", world_rank, i, signals[i]);
                     // printf("Rank %d sending 1 to %d\n", world_rank, source);
                     bool res = findAndRemoveElement(activeProcesses, signals[i]);
                     if (res)
                     {
-                        printf("Rank %d removed %d  handleSignal\n", world_rank, signals[i]);
+                        // printf("Rank %d removed %d  handleSignal\n", world_rank, signals[i]);
                     }
                 }
                 i++;
@@ -481,7 +482,7 @@ namespace Peregrine
         MPI_Testall(count, array, &flag, MPI_STATUS_IGNORE);
         if (flag)
         {
-            printf("RANK %d ALL DONE\n", world_rank);
+            // printf("RANK %d ALL DONE\n", world_rank);
             return true;
         }
         // printf("Not done%d \n", world_rank);
@@ -526,7 +527,7 @@ namespace Peregrine
             if (!done_ranges_given_flag.test_and_set(std::memory_order_acquire))
             {
                 // This thread successfully set the flag; execute the block
-                printf("Rank %d done ranges\n", world_rank);
+                // printf("Rank %d done ranges\n", world_rank);
                 done_ranges_given = true;
                 // done_cv.notify_all();
               
@@ -570,7 +571,7 @@ namespace Peregrine
         concurrent_range_queue.clear();
         // To reset (clear) the flag:
         done_ranges_given_flag.clear(std::memory_order_release);
-        printf("reset %d\n", world_rank);
+        // printf("reset %d\n", world_rank);
     }
 
     inline void RangeQueue::printRanges()
@@ -604,7 +605,7 @@ namespace Peregrine
             int send = world_rank;
             MPI_Request request;
 
-            printf("Rank %d attempting stealing from rank: %d - sending %d\n", world_rank, lowestRank, send);
+            // printf("Rank %d attempting stealing from rank: %d - sending %d\n", world_rank, lowestRank, send);
             MPI_Isend(&send, 1, MPI_INT, lowestRank, MPI_STEAL_CHANNEL, MPI_COMM_WORLD, &request);
             waiting_rank = lowestRank;
             // printf("Rank %d sending stealing from rank: %d - sending %d\n", world_rank, lowestRank, send);
@@ -640,7 +641,7 @@ namespace Peregrine
                 bool res = findAndRemoveElement(activeProcesses, status.MPI_SOURCE);
                 if (res)
                 {
-                    printf("Rank %d removed recvStolenAsync %d \n", world_rank, status.MPI_SOURCE);
+                    // printf("Rank %d removed recvStolenAsync %d \n", world_rank, status.MPI_SOURCE);
                 }
                 else
                 {
@@ -671,7 +672,7 @@ namespace Peregrine
             // printf("%d init robber\n", world_rank);
             MPI_Irecv(&robber_buffer, count, MPI_INT, MPI_ANY_SOURCE, MPI_STEAL_CHANNEL, MPI_COMM_WORLD, &robber_req);
             robber_recv_waiting = true;
-            printf("%d ready to recieve\n", world_rank);
+            // printf("%d ready to recieve\n", world_rank);
         }
     }
 
@@ -713,7 +714,7 @@ namespace Peregrine
         uint64_t buffer[2] = {0, 0};
         if (!maybeRange.has_value())
         {
-            printf("Rank %d sending 1 to %d\n", world_rank, source);
+            // printf("Rank %d sending 1 to %d\n", world_rank, source);
             bool res = findAndRemoveElement(activeProcesses, source);
             if (res)
             {
