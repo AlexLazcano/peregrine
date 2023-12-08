@@ -27,7 +27,7 @@ int main(int argc, char const *argv[])
 
     while (!rq.handleSignal())
     {
-        auto maybeRange = rq.popFirstRange();
+        auto maybeRange = rq.popRange();
 
         if (!maybeRange.has_value())
         {
