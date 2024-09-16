@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
+#include <mpi.h>
 #include "Peregrine.hh"
 
 
@@ -25,6 +25,13 @@ int main(int argc, char *argv[])
   const std::string pattern_name(argv[2]);
   size_t nthreads = argc < 4 ? 1 : std::stoi(argv[3]);
 
+  int world_rank, world_size;
+  MPI_Init(NULL, NULL);
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+  printf("Hello world from process %d, of %d. Thread num: %ld \n", world_rank, world_size, nthreads);
+
+
   std::vector<Peregrine::SmallGraph> patterns;
   if (auto end = pattern_name.rfind("motifs"); end != std::string::npos)
   {
@@ -47,18 +54,22 @@ int main(int argc, char *argv[])
   std::vector<std::pair<Peregrine::SmallGraph, uint64_t>> result;
   if (is_directory(data_graph_name))
   {
-    result = Peregrine::match<Peregrine::Pattern, uint64_t, Peregrine::AT_THE_END, Peregrine::UNSTOPPABLE>(data_graph_name, patterns, nthreads, process);
+    result = Peregrine::match<Peregrine::Pattern, uint64_t, Peregrine::AT_THE_END, Peregrine::UNSTOPPABLE>(data_graph_name, patterns, nthreads, process, world_rank, world_size);
   }
   else
   {
     Peregrine::SmallGraph G(data_graph_name);
-    result = Peregrine::match<Peregrine::Pattern, uint64_t, Peregrine::AT_THE_END, Peregrine::UNSTOPPABLE>(G, patterns, nthreads, process);
+    result = Peregrine::match<Peregrine::Pattern, uint64_t, Peregrine::AT_THE_END, Peregrine::UNSTOPPABLE>(G, patterns, nthreads, process, world_rank, world_size);
   }
 
   for (const auto &[p, v] : result)
   {
     std::cout << p << ": " << v << std::endl;
   }
+
+  printf("DONE PROCESS %d\n");
+
+  MPI_Finalize();
 
   return 0;
 }
